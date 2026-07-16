@@ -1,5 +1,10 @@
 # Feature 4: Account Behavior Analysis (Budgeting & Spend Patterns)
 
+**Version: V2.** Budgets, learned patterns, and personal inflation only make sense when data outlives a session — this feature requires a persistent adapter. Nothing in it talks to storage directly; it reads the same store as everything else.
+
+## Module Promise
+> Budget status is always computed from stored transactions and clearly stamped "as of" the latest import — the module never implies real-time freshness it doesn't have. Overspend explanations always point to the specific transactions responsible.
+
 ## Overview
 Turn historical transaction data into forward-looking guidance: budgets with on-track indicators and overspend warnings, plus pattern detection that groups spends and predicts what's coming.
 
@@ -47,7 +52,7 @@ Turn historical transaction data into forward-looking guidance: budgets with on-
 - Refunds landing in a later month than the original spend.
 
 ## Open Questions
-- Push notifications in MVP, or in-app indicators only (given data freshness depends on manual uploads)?
+- In-app indicators only, or also browser-local notifications? (Server push is off the table — there is no backend in V1/V2, and data freshness depends on manual uploads anyway.)
 - Rollover budgets (unused budget carries to next month) — MVP or later?
 - Minimum data history before predictions activate (suggest: 2–3 months)?
 

@@ -1,5 +1,10 @@
 # Feature 3: Aggregation of Account Statement Figures
 
+**Version: V1.** Aggregates whatever is in the store — in V1 that's the statements uploaded this session (a user can upload 12 months at once and get full averages); in V2 history accumulates across sessions. The math is identical in both. In V2, this feature also owns writing `Snapshot` records (net worth at a point in time, with prices used) — the engine of the planning doc's "net worth over time" headline.
+
+## Module Promise
+> Every number on the dashboard reconciles exactly to the transactions behind it, excludes self-transfers, and is honest about staleness — no total is shown without an "as of" date.
+
 ## Overview
 Combine data across all of a user's imported accounts into a single financial picture: overall wealth, monthly averages, investment vs liquid split, and money-flow visualizations.
 

@@ -1,5 +1,10 @@
 # Feature 5: Investment Habits & Goal Setting
 
+**Version: V2.** Goals, streaks, and long-horizon trends need data that outlives the session — requires a persistent adapter, same store interface as everything else.
+
+## Module Promise
+> Every nudge is an observation computed from the user's own stored data, is dismissible, and never crosses into financial advice or product recommendations.
+
 ## Overview
 Nudge users from passive tracking to active wealth-building: surface idle money, flag opportunities to save or invest based on budget headroom, and track trends against the budgets they've set.
 
