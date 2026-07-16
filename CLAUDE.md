@@ -1,218 +1,80 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code working in this repository. **Project-level guidelines only** — stack, commands, structure, and cross-cutting engineering conventions.
 
-## Stack & Setup
+Anything about *what* we're building — features, the data model, scope, version split, per-feature rules — lives in the planning docs, **not here**. Do not add feature or product-design detail to this file; put it in the planning docs and link if needed.
 
-**Python Web App** for a personal finance management platform that parses bank statements, classifies transactions, and provides financial insights.
+## Source of truth
 
-### Recommended Stack
-- **Backend**: Python 3.10+ with FastAPI (async-first, type-safe, auto-docs)
-- **Database**: PostgreSQL (transactional integrity, jsonb support for flexible schemas)
-- **ORM**: SQLAlchemy 2.0+ (async support, type hints)
-- **PDF Parsing**: pdfplumber + pypdf2
-- **Task Queue**: Celery + Redis (async PDF parsing/classification jobs)
-- **Frontend**: React 18+ with TypeScript (interactive dashboards)
-- **Charts**: Recharts or Plotly (see `/dataviz` skill before building visualizations)
-- **Classification**: scikit-learn for ML/NLP on transaction narrations
-- **Testing**: pytest + pytest-asyncio
+| For… | Go to |
+|------|-------|
+| Product vision, architecture, canonical data model, version split, per-feature design | [Personal Finance Organiser — Planning Document](https://app.notion.com/p/39a65a498a9780b0aa18d166368c8d2b) |
+| Milestones, sequencing, blocking decisions | [Project Planner](https://app.notion.com/p/39e65a498a9781b4b9eaf23bfe2f401d) |
+| Feature specs | `features/` |
 
-### Project Structure (once initialized)
+When this file and a planning doc disagree, **the planning doc wins** and this file is the bug.
+
+## The project in one line
+
+A local-first, privacy-first net-worth organiser for India. All parsing, valuation, and computation happen on the user's device; **no server ever reads user data.**
+
+## Non-negotiable engineering constraints
+
+These govern all code, regardless of feature. Breaking one is a design error, not a trade-off:
+
+- **Local-first, no server reads user data.** No backend database, no server-side processing of financial content. If a design pushes user data to a server, it is the wrong design — stop and reconsider.
+- **Deterministic where money is involved.** Any figure with financial or tax consequence comes from explicit, testable logic — never improvised by an LLM.
+- **Talk to the storage-adapter interface, never a concrete store.** This seam is what keeps versions additive instead of rewrites. (Interface design lives in planning doc §5.1.)
+- **Never log or persist secrets or raw financial data.** Decrypt protected PDFs in memory only; store masked identifiers only; keep raw financial content out of logs, telemetry, and crash reports.
+- **Never delete source data; store user overrides separately** so a re-import never loses manual edits.
+
+## Stack
+
+- **Language**: TypeScript (strict)
+- **UI**: React 18+ with Vite
+- **In-browser parsing**: pdf.js (PDF, in-memory decryption for protected files), a client-side CSV parser
+- **Storage**: in-memory adapter (V1) / WASM SQLite over OPFS (V2), behind the storage-adapter interface
+- **Charts**: Recharts
+- **Tests**: Vitest + React Testing Library; Playwright (end-to-end)
+- **Lint/format**: ESLint + Prettier; `tsc --noEmit` for type checking
+
+There is no backend, server database, or task queue by design.
+
+## Commands
+
+```bash
+npm install              # install
+npm run dev              # Vite dev server (HMR)
+npm run typecheck        # tsc --noEmit
+npm run lint             # eslint
+npm run format           # prettier --write
+npm test                 # vitest (all); append a name to scope, e.g. npm test parsers
+npm run test:coverage    # coverage
+npm run test:e2e         # Playwright
+npm run build            # production build
+```
+
+## Project structure (once initialized)
+
 ```
 moneymap/
-├── backend/                 # FastAPI app
-│   ├── app/
-│   │   ├── main.py         # FastAPI entry point
-│   │   ├── models/         # SQLAlchemy ORM models (accounts, transactions, etc.)
-│   │   ├── schemas/        # Pydantic request/response schemas
-│   │   ├── services/       # Business logic (parsing, classification, aggregation)
-│   │   │   ├── pdf_parser.py        # Feature 1: PDF extraction
-│   │   │   ├── classifier.py        # Feature 2: Transaction classification
-│   │   │   ├── aggregator.py        # Feature 3: Dashboard data
-│   │   │   └── analyzer.py          # Feature 4-5: Budgeting & trends
-│   │   ├── api/            # Route handlers
-│   │   └── tasks/          # Celery tasks (PDF parsing in background)
-│   ├── tests/
-│   ├── requirements.txt
-│   └── Dockerfile
-├── frontend/               # React + TypeScript
-│   ├── src/
-│   │   ├── pages/         # Dashboard, Budgets, Goals views
-│   │   ├── components/    # Reusable UI components
-│   │   └── hooks/         # API calls, state management
-│   └── package.json
-├── features/              # Feature specs (already present)
-├── docker-compose.yml     # Dev environment (PostgreSQL, Redis)
-└── CLAUDE.md             # This file
+├── src/
+│   ├── ingestion/    # File intake, in-memory decryption, format detection, parsers
+│   ├── model/        # Canonical data model (design lives in planning doc §6)
+│   ├── enrichment/   # Classification, dedup, internal-transfer detection, valuation
+│   ├── engine/       # Deterministic net-worth + snapshot engine
+│   ├── storage/      # Storage-adapter interface + concrete adapters
+│   ├── components/   # Reusable UI
+│   ├── pages/        # Views
+│   └── hooks/        # State + data access
+├── tests/
+├── features/         # Feature specs
+├── index.html
+└── package.json
 ```
 
-## Development Commands
+## Working conventions
 
-### Initial Setup
-```bash
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install backend dependencies
-cd backend
-pip install -r requirements.txt
-
-# Set up database
-createdb moneymap_dev  # or use Docker Compose
-alembic upgrade head
-
-# Start Redis (for Celery)
-redis-server
-
-# Start FastAPI dev server (reloads on changes)
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# In another terminal, start Celery worker
-celery -A app.tasks worker --loglevel=info
-```
-
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev   # Vite dev server with HMR
-```
-
-### Testing
-```bash
-# Run all tests
-pytest
-
-# Run tests for a single module (e.g., PDF parsing)
-pytest tests/services/test_pdf_parser.py
-
-# Run with coverage
-pytest --cov=app tests/
-
-# Watch mode (requires pytest-watch)
-ptw
-```
-
-### Linting & Formatting
-```bash
-# Format code
-black backend/app backend/tests
-
-# Lint
-ruff check backend/
-
-# Type checking
-mypy backend/app
-```
-
-### Database Migrations
-```bash
-# Create a new migration
-alembic revision --autogenerate -m "description"
-
-# Apply migrations
-alembic upgrade head
-
-# Rollback one migration
-alembic downgrade -1
-```
-
-### Docker Development
-```bash
-# Start PostgreSQL + Redis in background
-docker-compose up -d
-
-# Tear down
-docker-compose down
-```
-
-## Architecture & Data Flow
-
-The app follows a **pipeline architecture** with data flowing unidirectionally:
-
-```
-Upload PDF
-    ↓
-[Feature 1] Parse Statement
-    ├─ Auto-detect bank format
-    ├─ Extract transactions, account metadata
-    ├─ Validate (balance checks, date continuity)
-    └─ Persist to DB (idempotent on re-upload)
-    ↓
-[Feature 2] Classify Transactions
-    ├─ Rule/keyword matching (confidence-first)
-    ├─ Learn custom labels from user behavior
-    └─ Store classification provenance & confidence
-    ↓
-[Feature 3] Aggregation & Dashboard
-    ├─ Sum balances across accounts
-    ├─ Calculate monthly averages (exclude self-transfers)
-    ├─ Break down liquid vs invested
-    └─ Render money-flow charts & drill-down
-    ↓
-[Feature 4] Budgeting & Spend Analysis
-    ├─ Auto-suggest budgets from historical averages
-    ├─ Track pace (on-track / at-risk / over)
-    ├─ Detect recurring transactions
-    └─ Analyze root causes of overspends
-    ↓
-[Feature 5] Investment Goals & Trends
-    ├─ Flag idle funds
-    ├─ Surface save/invest opportunities
-    ├─ Track goal progress
-    └─ Show long-term trend lines
-```
-
-**Key architectural decisions:**
-- **Async-first**: PDF parsing and classification are long-running; use Celery tasks so the API never blocks.
-- **Immutability of source data**: Parsed transactions include provenance (source file, page, raw text). Never delete transactions; mark as "hidden" if duplicates are detected.
-- **User overrides survive re-imports**: Classification and labels are stored separately from the transaction row, so re-parsing the same statement doesn't lose manual edits.
-- **Data quality is the foundation**: Features 3–5 are only as good as the accuracy of Features 1–2. Validation gates everything.
-
-## Priority & Scope
-
-**MVP scope (Features 1–2 + 3 basic):**
-- Multi-bank PDF parsers (start with 2–3 banks)
-- Transaction classification (rules-based + custom labels)
-- Basic wealth aggregation dashboard (balances, monthly trends)
-
-**Post-MVP (Features 4–5, advanced features):**
-- Budgeting & spend pattern detection
-- Investment goals & idle-funds detection
-- Portfolio integration (requires external APIs)
-
-## Critical Implementation Notes
-
-### Data Accuracy & Validation
-- Every parsed transaction must store its source (statement file, line number, raw text).
-- Balance reconciliation checks are non-negotiable — flag ambiguous data for manual review rather than silently persisting.
-- Deduplication is critical: overlapping statement periods must not double-count transactions.
-
-### Security & Privacy
-- Bank statements are highly sensitive. Encrypt them at rest; never log raw PDFs or passwords.
-- Password-protected PDFs: decrypt in-memory only; never persist or log passwords.
-- Test with real anonymized statements early to catch parsing issues.
-
-### Classification Quality
-- MVP target: ≥80% auto-classification coverage on supported banks.
-- Unclassified transactions must be easy to triage (show them sorted by amount/frequency).
-- Every classification stores its source (rule ID, confidence, user override). This enables learning.
-
-### Frontend Charting
-- Use `/dataviz` skill before building charts. It ensures consistent light/dark theme, accessible colors, and responsive layouts.
-- Charts must support drill-down to underlying transactions (tap a bar → see the transactions that make up that amount/time period).
-
-## Testing Strategy
-
-- **Unit tests** for parsers (mock PDFs with known content; validate extraction accuracy).
-- **Integration tests** for the classification pipeline (real transactions with labeled outputs).
-- **End-to-end tests** for the dashboard (upload a statement → verify balances & aggregates are correct).
-- **Data quality tests** for validation rules (run `pytest tests/services/test_validators.py` before each release).
-
-## Useful Resources
-
-- **Feature specs**: `features/` directory — read 00-overview.md for dependency flow.
-- **API patterns**: FastAPI docs at `http://localhost:8000/docs` (auto-generated Swagger UI).
-- **Database schema**: Check `app/models/` for the ORM models (they are the source of truth).
-- **Celery tasks**: `app/tasks/` — all async work happens here.
+- **Design decisions must use the `software-design-philosophy` skill** (`.agents/skills/software-design-philosophy/`). Apply it whenever designing a module or interface, judging whether an abstraction earns its place, or making an architectural call — then record the decision **and its reasoning in the planning docs**, not in this file.
+- **Before building any chart or visualization, read the `/dataviz` skill.**
+- **Strategic over tactical.** Invest the extra ~10–20% to leave structure better than you found it; match the conventions of surrounding code.
