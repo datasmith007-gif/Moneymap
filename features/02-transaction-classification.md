@@ -1,5 +1,10 @@
 # Feature 2: Transaction Classification
 
+**Version: V1** for rule/dictionary classification and manual labels. **V2** for anything that must outlive the session: learned personal rules, label propagation across imports, suggestion feedback loops.
+
+## Module Promise
+> Every transaction in the store always carries exactly one label (default `Unclassified`) plus the provenance of how it got it. User labels always beat automatic ones and are never silently reverted. Classification never sends transaction data off the device.
+
 ## Overview
 Label every imported transaction so that aggregation, budgeting, and behavior analysis have meaningful categories to work with. Classification is a blend of automatic (predefined labels), custom (user-defined labels), and hybrid (system-suggested labels learned from both).
 
@@ -20,7 +25,7 @@ Label every imported transaction so that aggregation, budgeting, and behavior an
 - Classification engine (layered, cheapest first):
   1. **Rule/keyword matching** on narration (merchant names, UPI handles, keywords like "SALARY", "NEFT-RENT").
   2. **Merchant dictionary** — normalized merchant → category mapping, grown over time.
-  3. **ML/LLM fallback** for narrations the rules miss (post-MVP if needed).
+  3. **ML/LLM fallback** for narrations the rules miss (post-MVP if needed; must run on-device to keep the module promise — narrations never leave the machine).
 - Every auto-classified transaction stores a confidence score and the rule/source that classified it.
 - Anything below confidence threshold → `Unclassified` (never guess wildly; unclassified is honest).
 
@@ -36,7 +41,7 @@ Label every imported transaction so that aggregation, budgeting, and behavior an
   - Propagate a user's manual label to future matching transactions automatically (with a visible "auto-applied from your rule" tag).
   - Periodically suggest merging/splitting labels when user behavior indicates it.
 - Suggestions are always accept/reject — the system proposes, the user disposes.
-- Feedback loop: every accept/reject and manual re-label is training signal for the personal rules and the global merchant dictionary.
+- Feedback loop: every accept/reject and manual re-label is training signal for the personal rules and the local merchant dictionary (all on-device; the shipped dictionary improves only via curated app releases).
 
 ### 2.4 Metrics & Quality
 - Track and display per import: % auto-classified, % user-classified, % unclassified.
@@ -45,9 +50,9 @@ Label every imported transaction so that aggregation, budgeting, and behavior an
 ## Acceptance Criteria
 - [ ] Every transaction has exactly one primary label at all times (default `Unclassified`).
 - [ ] User can create a custom label and bulk-apply it in ≤3 interactions.
-- [ ] A manual label on a recurring merchant auto-applies to future imports of that merchant.
+- [ ] A manual label on a recurring merchant auto-applies to future imports of that merchant (within the store's lifetime — cross-session propagation is V2).
 - [ ] Auto vs custom vs hybrid provenance is stored per transaction and visible on tap.
-- [ ] User overrides persist across re-imports and re-classification runs.
+- [ ] User overrides survive re-imports and re-classification runs within the store's lifetime (session in V1, indefinitely in V2).
 
 ## Edge Cases
 - Same merchant, different intent (Amazon = shopping vs Amazon = business purchases).
@@ -57,9 +62,9 @@ Label every imported transaction so that aggregation, budgeting, and behavior an
 
 ## Open Questions
 - Single-label vs multi-label (tags) per transaction for MVP?
-- Is the merchant dictionary global (shared across users, anonymized) or per-user only?
+- Merchant dictionary: shipped-with-the-app (curated, updated via app releases) vs per-user only? (A crowd-sourced dictionary would require sending narrations off-device, which breaks the module promise — off the table unless the privacy posture is consciously relaxed.)
 - LLM-based classification in MVP or rules-only first?
 
 ## Dependencies
-- Feature 1 (needs persisted transactions).
+- Feature 1 (needs transactions in the store).
 - Feeds Features 3, 4, 5 — all downstream analytics depend on label quality.
