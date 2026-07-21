@@ -75,6 +75,6 @@ moneymap/
 
 ## Working conventions
 
-- **Design decisions must use the `software-design-philosophy` skill** (`.agents/skills/software-design-philosophy/`). Apply it whenever designing a module or interface, judging whether an abstraction earns its place, or making an architectural call — then record the decision **and its reasoning in the planning docs**, not in this file.
+- **Design decisions must use the `software-design-philosophy` skill** (`.claude/skills/software-design-philosophy/`). Apply it whenever designing a module or interface, judging whether an abstraction earns its place, or making an architectural call — then record the decision **and its reasoning in the planning docs**, not in this file.
 - **Before building any chart or visualization, read the `/dataviz` skill.**
 - **Strategic over tactical.** Invest the extra ~10–20% to leave structure better than you found it; match the conventions of surrounding code.
