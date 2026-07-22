@@ -13,10 +13,32 @@ Ingest bank account statements uploaded as PDFs, extract transactions and accoun
 - Guarantee data accuracy through automated data-quality checks.
 - Handle password-protected PDFs, unsupported files, and duplicate uploads gracefully.
 
+## Module Design (§1.1 & §1.4)
+
+Design for the registry, auto-detection, and fallbacks. TypeScript, in-browser, on-device. **First two banks proven: ICICI and Axis** (prove the pattern on two before scaling to the rest of the shortlist). See planning doc §5.4.
+
+**One door in.** Callers get a single function: give it a PDF, get back either canonical entities or a clear reason it couldn't parse. pdf.js, bank layouts, and column geometry all stay hidden behind it. The return is a tagged outcome the UI switches on:
+
+| Outcome | Meaning |
+|---------|---------|
+| `Parsed` | `Account` + `Transaction[]`, each with provenance (source, page, raw line) |
+| `NeedsReview` | Partial parse — import what passed, flag the rest |
+| `Unsupported` | Recognised as an unknown format; carries a layout fingerprint only |
+| `Unreadable` | Scanned/image, corrupt, empty, or oversized |
+| `Encrypted` | Password-protected (detected here; decryption is §1.5, later) |
+
+**Each bank owns both how it's spotted and how it's read.** A bank's layout is one fact, so detection and parsing for a bank live in the *same* module — never a central detector separate from the parser (that smears one fact across two places and invites silent wrong parses). Every bank parser exposes `detect` (fingerprint from header text) and `parse`. The **registry only selects**: it asks each registered parser whether it recognises the document, picks the confident match, and dispatches; no match → `Unsupported`. Adding a bank — or a new layout version of an existing bank — is just registering another parser, no core changes.
+
+**Failures are values, not exceptions.** Expected outcomes (scanned, unknown, corrupt) are returned with an actionable message and a reason code; only broken invariants throw. The `Unsupported` fingerprint is bank name + layout signature **only** — never transaction data — and never leaves the device unless the user chooses to report it.
+
+**Scope seam.** This slice returns canonical entities *in memory*. Reconciliation (§1.2), dedup (§1.3), password decryption (§1.5), and store-writing (§1.6) are later tickets that slot in behind clean seams.
+
+**Open design question:** how raw the shared text representation should be — positioned words + shared column helpers (lean) vs pre-extracted rows. Deferred until the second parser exists.
+
 ## Functional Requirements
 
 ### 1.1 Bank-Specific Parsers
-- Identify the major banks to support at launch (shortlist based on target market, e.g. top 8–10 banks by customer base).
+- Identify the major banks to support at launch (shortlist based on target market, e.g. top 8–10 banks by customer base). **Launch-two: ICICI and Axis.**
 - Build one parser per bank/statement format. Each parser must extract:
   - Account holder name, account number (masked), account type
   - Statement period (from date, to date)

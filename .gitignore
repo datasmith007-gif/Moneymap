@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+
+# Env / local
+.env
+.env.local
+*.local
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+
+# Private sample statements — real financial data, NEVER commit.
+# The folder is kept in git via its README; everything else inside is ignored.
+fixtures/private/*
+!fixtures/private/README.md
