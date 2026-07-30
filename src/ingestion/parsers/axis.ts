@@ -3,6 +3,7 @@ import type { StatementDocument } from '../document.ts';
 import type { DetectionResult, BankParser, ParseContext } from '../parser.ts';
 import type { NeedsReviewOutcome, ParseOutcome } from '../outcome.ts';
 import { documentLines, type Line } from '../layout.ts';
+import { firstParsed, hasLabels, headerX, joinText, splitColumns } from '../columns.ts';
 import { parseDmyDate, parseIndianAmount } from '../fields.ts';
 
 /**
@@ -61,8 +62,8 @@ export class AxisParser implements BankParser {
     if (headerIndex === -1) {
       return unreadableFallback('Could not locate the Axis column header row.');
     }
-    const bands = deriveBands(lines[headerIndex]!);
-    if (bands === null) {
+    const boundaries = deriveBoundaries(lines[headerIndex]!);
+    if (boundaries === null) {
       return unreadableFallback('The Axis column header was incomplete.');
     }
 
@@ -91,7 +92,7 @@ export class AxisParser implements BankParser {
     let index = 0;
 
     for (const line of lines.slice(headerIndex + 1)) {
-      const cells = classify(line, bands);
+      const cells = classify(line, boundaries);
 
       // Not a terminating line: accumulate its narration and move on.
       if (cells.balance === null) {
@@ -179,38 +180,34 @@ export class AxisParser implements BankParser {
 
 // ── Column geometry ─────────────────────────────────────────────────────────
 
-/** x-boundaries between columns, taken from the header row's token positions. */
-interface Bands {
-  readonly chqX: number;
-  readonly debitX: number;
-  readonly creditX: number;
-  readonly balanceX: number;
-  readonly initX: number;
-}
+/**
+ * The Axis columns, left→right, named for `splitColumns`. `date` sits left of the
+ * Chq column; the Chq column's content folds into narration (narration text often
+ * begins left of the Particulars header); `init` is the trailing branch-init
+ * column, kept as a name so it is captured and then ignored (no canonical field).
+ * Six names for the five boundaries `deriveBoundaries` produces.
+ */
+const AXIS_COLUMNS = ['date', 'narration', 'debit', 'credit', 'balance', 'init'] as const;
 
 function isColumnHeader(line: Line): boolean {
-  const text = line.words.map((w) => w.text).join(' ').toUpperCase();
-  return text.includes('PARTICULARS') && text.includes('BALANCE') && text.includes('DEBIT');
+  return hasLabels(line, ['PARTICULARS', 'BALANCE', 'DEBIT']);
 }
 
 /**
- * Derive column boundaries from the header labels' left-x. Verified against real
- * data: each right-aligned amount's centre-x falls between its own header's x and
- * the next header's x, so the header left-x values are correct dividers.
+ * Derive the ascending column boundaries from the header labels' left-x. Verified
+ * against real data: each right-aligned amount's centre-x falls between its own
+ * header's x and the next header's x, so the header left-x values are correct
+ * dividers. Init.Br may occasionally be absent; default just past the balance
+ * column so the balance region still terminates.
  */
-function deriveBands(header: Line): Bands | null {
-  const at = (needle: string): number | null => {
-    const w = header.words.find((word) => word.text.toUpperCase().startsWith(needle));
-    return w ? w.x : null;
-  };
-  const chqX = at('CHQ');
-  const debitX = at('DEBIT');
-  const creditX = at('CREDIT');
-  const balanceX = at('BALANCE');
-  const initX = at('INIT');
+function deriveBoundaries(header: Line): number[] | null {
+  const chqX = headerX(header, 'CHQ');
+  const debitX = headerX(header, 'DEBIT');
+  const creditX = headerX(header, 'CREDIT');
+  const balanceX = headerX(header, 'BALANCE');
   if (chqX === null || debitX === null || creditX === null || balanceX === null) return null;
-  // Init.Br may occasionally be absent; default just past the balance column.
-  return { chqX, debitX, creditX, balanceX, initX: initX ?? balanceX + 60 };
+  const initX = headerX(header, 'INIT') ?? balanceX + 60;
+  return [chqX, debitX, creditX, balanceX, initX];
 }
 
 interface Cells {
@@ -221,32 +218,17 @@ interface Cells {
   readonly balance: Paise | null;
 }
 
-/** Assign a line's words to columns by centre-x, then interpret each column. */
-function classify(line: Line, bands: Bands): Cells {
-  const narration: string[] = [];
-  let date: string | null = null;
-  let debit: Paise | null = null;
-  let credit: Paise | null = null;
-  let balance: Paise | null = null;
-
-  for (const word of line.words) {
-    const centre = word.x + word.width / 2;
-    if (centre < bands.chqX) {
-      // Left column: the transaction date, when present.
-      date ??= parseDmyDate(word.text);
-    } else if (centre < bands.debitX) {
-      narration.push(word.text);
-    } else if (centre < bands.creditX) {
-      debit ??= parseIndianAmount(word.text);
-    } else if (centre < bands.balanceX) {
-      credit ??= parseIndianAmount(word.text);
-    } else if (centre < bands.initX) {
-      balance ??= parseIndianAmount(word.text);
-    }
-    // centre >= initX is the branch-init column — ignored (no canonical field).
-  }
-
-  return { date, narration: narration.join(' '), debit, credit, balance };
+/** Assign a line's words to columns by centre-x (shared helper), then interpret
+ *  each column with the Indian field grammar. */
+function classify(line: Line, boundaries: readonly number[]): Cells {
+  const cols = splitColumns(line, boundaries, AXIS_COLUMNS);
+  return {
+    date: firstParsed(cols.date!, parseDmyDate),
+    narration: joinText(cols.narration!),
+    debit: firstParsed(cols.debit!, parseIndianAmount),
+    credit: firstParsed(cols.credit!, parseIndianAmount),
+    balance: firstParsed(cols.balance!, parseIndianAmount),
+  };
 }
 
 // ── Header metadata ─────────────────────────────────────────────────────────

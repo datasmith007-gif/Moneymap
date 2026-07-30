@@ -3,6 +3,7 @@ import type { StatementDocument } from '../document.ts';
 import type { DetectionResult, BankParser, ParseContext } from '../parser.ts';
 import type { ParseOutcome } from '../outcome.ts';
 import { documentLines, type Line } from '../layout.ts';
+import { firstParsed, hasLabels, headerX, joinText, splitColumns } from '../columns.ts';
 import { parseDmyDate, parseIndianAmount, parseMonthNameDate } from '../fields.ts';
 
 /**
@@ -55,8 +56,8 @@ export class IciciParser implements BankParser {
 
     const bandsHeader = lines.find(isColumnHeader);
     if (!bandsHeader) return unreadableFallback('No ICICI transaction header row was found.');
-    const bands = deriveBands(bandsHeader);
-    if (bands === null) return unreadableFallback('The ICICI transaction header was incomplete.');
+    const boundaries = deriveBoundaries(bandsHeader);
+    if (boundaries === null) return unreadableFallback('The ICICI transaction header was incomplete.');
 
     const period = parsePeriod(savings.periodText);
     if (period === null) return unreadableFallback('Could not read the ICICI statement period.');
@@ -93,7 +94,7 @@ export class IciciParser implements BankParser {
       if (isColumnHeader(line) || isPageMarker(line)) continue;
       if (line.y < (topHeaderY.get(line.page) ?? 0)) continue; // above the header = page furniture
 
-      const cells = classify(line, bands);
+      const cells = classify(line, boundaries);
 
       if (cells.balance === null) {
         if (cells.narration) narrationLines.push({ page: line.page, y: line.y, text: cells.narration });
@@ -218,32 +219,26 @@ function parsePeriod(text: string): { start: string; end: string } | null {
 
 // ── Column geometry ─────────────────────────────────────────────────────────
 
-interface Bands {
-  readonly modeX: number;
-  readonly depositsX: number;
-  readonly withdrawalsX: number;
-  readonly balanceX: number;
-}
+/**
+ * The ICICI columns, left→right, named for `splitColumns`. Note the order differs
+ * from Axis: DEPOSITS (credit) precedes WITHDRAWALS (debit). The MODE and
+ * PARTICULARS columns are both narration, so everything between the date and the
+ * DEPOSITS divider folds into `narration`. Five names for the four boundaries
+ * `deriveBoundaries` produces; `balance` is the final, unbounded right column.
+ */
+const ICICI_COLUMNS = ['date', 'narration', 'deposit', 'withdrawal', 'balance'] as const;
 
 function isColumnHeader(line: Line): boolean {
-  const text = line.words.map((w) => w.text).join(' ').toUpperCase();
-  return (
-    text.includes('PARTICULARS') &&
-    text.includes('DEPOSITS') &&
-    text.includes('WITHDRAWALS') &&
-    text.includes('BALANCE')
-  );
+  return hasLabels(line, ['PARTICULARS', 'DEPOSITS', 'WITHDRAWALS', 'BALANCE']);
 }
 
-function deriveBands(header: Line): Bands | null {
-  const at = (needle: string): number | null =>
-    header.words.find((w) => w.text.toUpperCase().startsWith(needle))?.x ?? null;
-  const modeX = at('MODE');
-  const depositsX = at('DEPOSITS');
-  const withdrawalsX = at('WITHDRAWALS');
-  const balanceX = at('BALANCE');
+function deriveBoundaries(header: Line): number[] | null {
+  const modeX = headerX(header, 'MODE');
+  const depositsX = headerX(header, 'DEPOSITS');
+  const withdrawalsX = headerX(header, 'WITHDRAWALS');
+  const balanceX = headerX(header, 'BALANCE');
   if (modeX === null || depositsX === null || withdrawalsX === null || balanceX === null) return null;
-  return { modeX, depositsX, withdrawalsX, balanceX };
+  return [modeX, depositsX, withdrawalsX, balanceX];
 }
 
 interface Cells {
@@ -254,28 +249,15 @@ interface Cells {
   readonly balance: Paise | null;
 }
 
-function classify(line: Line, bands: Bands): Cells {
-  const narration: string[] = [];
-  let date: string | null = null;
-  let deposit: Paise | null = null;
-  let withdrawal: Paise | null = null;
-  let balance: Paise | null = null;
-
-  for (const word of line.words) {
-    const centre = word.x + word.width / 2;
-    if (centre < bands.modeX) {
-      date ??= parseDmyDate(word.text);
-    } else if (centre < bands.depositsX) {
-      narration.push(word.text); // MODE + PARTICULARS columns are both description
-    } else if (centre < bands.withdrawalsX) {
-      deposit ??= parseIndianAmount(word.text);
-    } else if (centre < bands.balanceX) {
-      withdrawal ??= parseIndianAmount(word.text);
-    } else {
-      balance ??= parseIndianAmount(word.text);
-    }
-  }
-  return { date, narration: narration.join(' '), deposit, withdrawal, balance };
+function classify(line: Line, boundaries: readonly number[]): Cells {
+  const cols = splitColumns(line, boundaries, ICICI_COLUMNS);
+  return {
+    date: firstParsed(cols.date!, parseDmyDate),
+    narration: joinText(cols.narration!),
+    deposit: firstParsed(cols.deposit!, parseIndianAmount),
+    withdrawal: firstParsed(cols.withdrawal!, parseIndianAmount),
+    balance: firstParsed(cols.balance!, parseIndianAmount),
+  };
 }
 
 // ── Anchors & narration ─────────────────────────────────────────────────────
