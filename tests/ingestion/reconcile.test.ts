@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reconcile, reconcileOutcome } from '../../src/ingestion/reconcile.ts';
+import { reconcile, reconcileOutcome, runningBalanceBreaks } from '../../src/ingestion/reconcile.ts';
 import { AxisParser } from '../../src/ingestion/parsers/axis.ts';
 import type { ParseContext } from '../../src/ingestion/parser.ts';
 import type { ParseOutcome } from '../../src/ingestion/outcome.ts';
@@ -150,5 +150,55 @@ describe('reconcileOutcome', () => {
     const ctx: ParseContext = { statementId: 'test', importedAt: '2026-07-22T00:00:00Z' };
     const outcome = reconcileOutcome(new AxisParser().parse(axisSyntheticDoc(), ctx));
     expect(outcome.kind).toBe('parsed');
+  });
+});
+
+describe('runningBalanceBreaks', () => {
+  it('finds nothing in a continuous statement', () => {
+    expect(runningBalanceBreaks(goodStatement())).toEqual([]);
+  });
+
+  it('locates the broken row and reports both figures', () => {
+    const statement = goodStatement({
+      transactions: [
+        txn({ date: '2025-08-02', type: 'debit', amount: 20000, balanceAfter: 80000 }),
+        // Should be 580000; the printed balance is 100.00 too high.
+        txn({ date: '2025-08-03', type: 'credit', amount: 500000, balanceAfter: 590000 }),
+      ],
+    });
+    expect(runningBalanceBreaks(statement)).toEqual([
+      { index: 1, date: '2025-08-03', expected: 580000, printed: 590000 },
+    ]);
+  });
+
+  it('does not cascade a single break into every later row', () => {
+    const statement = goodStatement({
+      transactions: [
+        txn({ date: '2025-08-02', type: 'debit', amount: 20000, balanceAfter: 90000 }), // wrong
+        txn({ date: '2025-08-03', type: 'credit', amount: 500000, balanceAfter: 590000 }), // follows
+        txn({ date: '2025-08-04', type: 'debit', amount: 30050, balanceAfter: 559950 }), // follows
+      ],
+    });
+    expect(runningBalanceBreaks(statement).map((b) => b.index)).toEqual([0]);
+  });
+
+  it('skips the pair straddling a row with no printed balance', () => {
+    const statement = goodStatement({
+      transactions: [
+        txn({ date: '2025-08-02', type: 'debit', amount: 20000, balanceAfter: 80000 }),
+        txn({ date: '2025-08-03', type: 'credit', amount: 500000, balanceAfter: null }),
+        txn({ date: '2025-08-04', type: 'debit', amount: 30050, balanceAfter: 1 }),
+      ],
+    });
+    expect(runningBalanceBreaks(statement)).toEqual([]);
+  });
+
+  it('is the same rule the gate reports', () => {
+    const statement = goodStatement({
+      transactions: [txn({ date: '2025-08-02', type: 'debit', amount: 20000, balanceAfter: 90000 })],
+      closingBalance: 90000,
+    });
+    expect(runningBalanceBreaks(statement)).toHaveLength(1);
+    expect(reconcile(statement).issues.some((i) => i.includes('discontinuous'))).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import type { ParsedStatement } from '../model/canonical.ts';
+import type { Paise, ParsedStatement } from '../model/canonical.ts';
 import type { ParseOutcome } from './outcome.ts';
 
 /**
@@ -98,16 +98,36 @@ function checkClosingBalance(statement: ParsedStatement, issues: string[]): void
   }
 }
 
+/** One row whose printed running balance does not follow from the previous one. */
+export interface BalanceBreak {
+  /** 0-based position in `statement.transactions`. */
+  readonly index: number;
+  /** The row's date, ISO 8601 — enough to locate it without carrying an amount. */
+  readonly date: string;
+  /** What the balance should have been: previous balance ∓ this row's amount. */
+  readonly expected: Paise;
+  /** What the statement actually printed. */
+  readonly printed: Paise;
+}
+
 /**
- * Running-balance continuity: each printed running balance must follow from the
- * previous one and this row's signed amount. Anchoring on consecutive *printed*
- * balances (rather than an accumulated total) localises a break to the row where
- * it happens instead of cascading it through every later row. Rows without a
- * printed balance are skipped — the pair straddling them cannot be verified.
+ * The rows where running-balance continuity breaks — the raw finding behind the
+ * prose check below.
+ *
+ * Exported because two callers need this same rule and it must exist in exactly
+ * one place: the gate turns it into a privacy-safe `issues` string, and the import
+ * UI marks the offending rows so a human can see *where* a parse went wrong. A UI
+ * that recomputed "does this balance follow?" itself would be a second copy of a
+ * money rule — precisely the leak this module exists to prevent.
+ *
+ * Anchoring on consecutive *printed* balances (rather than an accumulated total)
+ * localises a break to the row where it happens instead of cascading it through
+ * every later row. Rows without a printed balance are skipped — the pair
+ * straddling them cannot be verified.
  */
-function checkRunningBalance(statement: ParsedStatement, issues: string[]): void {
-  const breaks: { index: number; date: string }[] = [];
-  let prevBalance: number | null = statement.openingBalance;
+export function runningBalanceBreaks(statement: ParsedStatement): BalanceBreak[] {
+  const breaks: BalanceBreak[] = [];
+  let prevBalance: Paise | null = statement.openingBalance;
 
   statement.transactions.forEach((txn, index) => {
     if (txn.balanceAfter === null) {
@@ -116,10 +136,22 @@ function checkRunningBalance(statement: ParsedStatement, issues: string[]): void
     }
     if (prevBalance !== null) {
       const expected = prevBalance + (txn.type === 'credit' ? txn.amount : -txn.amount);
-      if (txn.balanceAfter !== expected) breaks.push({ index, date: txn.date });
+      if (txn.balanceAfter !== expected) {
+        breaks.push({ index, date: txn.date, expected, printed: txn.balanceAfter });
+      }
     }
     prevBalance = txn.balanceAfter;
   });
+
+  return breaks;
+}
+
+/**
+ * Running-balance continuity: each printed running balance must follow from the
+ * previous one and this row's signed amount.
+ */
+function checkRunningBalance(statement: ParsedStatement, issues: string[]): void {
+  const breaks = runningBalanceBreaks(statement);
 
   if (breaks.length > 0) {
     const first = breaks[0]!;

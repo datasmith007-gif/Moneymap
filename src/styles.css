@@ -1,0 +1,362 @@
+/*
+ * Colour tokens come from the project's data-viz palette reference (surfaces,
+ * ink, and the reserved status pair). Status colour never carries meaning on its
+ * own here — every good/critical cue ships with a glyph and a word — and the
+ * text-sized "good" uses the success-text step rather than the mark step, which
+ * is too light to read against the light surface.
+ */
+:root {
+  --plane: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --rule: #e1e0d9;
+  --border: rgba(11, 11, 11, 0.1);
+  --good: #006300;
+  --critical: #d03b3b;
+  --good-wash: rgba(12, 163, 12, 0.08);
+  --critical-wash: rgba(208, 59, 59, 0.08);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --plane: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --rule: #2c2c2a;
+    --border: rgba(255, 255, 255, 0.1);
+    --good: #0ca30c;
+    --critical: #e66767;
+    --good-wash: rgba(12, 163, 12, 0.12);
+    --critical-wash: rgba(230, 103, 103, 0.12);
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--plane);
+  color: var(--ink);
+  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.app {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 32px 20px 80px;
+}
+
+.app-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.app-head h1 {
+  font-size: 20px;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.tagline {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.link {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  color: var(--ink-2);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+}
+
+/* ── Panels ──────────────────────────────────────────────────────────────── */
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.panel-head h2 {
+  font-size: 15px;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.panel p {
+  margin: 0 0 8px;
+  color: var(--ink-2);
+}
+
+/* ── Verdict ─────────────────────────────────────────────────────────────── */
+
+.verdict-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink) !important;
+  margin: 0 0 6px;
+}
+
+.verdict-glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 700;
+  flex: none;
+}
+
+.verdict-good {
+  background: var(--good-wash);
+}
+.verdict-good .verdict-glyph {
+  background: var(--good);
+  color: #fff;
+}
+.verdict-critical {
+  background: var(--critical-wash);
+}
+.verdict-critical .verdict-glyph {
+  background: var(--critical);
+  color: #fff;
+}
+
+.verdict-sub {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  margin: 0 !important;
+}
+
+/* ── Facts ───────────────────────────────────────────────────────────────── */
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px 20px;
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.issues {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.issues li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.issue-glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--critical);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  flex: none;
+  margin-top: 2px;
+}
+
+/* ── Table ───────────────────────────────────────────────────────────────── */
+
+.table-scroll {
+  overflow-x: auto;
+  margin: 0 -20px;
+  padding: 0 20px;
+}
+
+.txns {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.txns th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 10px 8px;
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+
+.txns td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+.txns .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.txns .narration {
+  max-width: 420px;
+  color: var(--ink-2);
+}
+
+.row-break td {
+  background: var(--critical-wash);
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+.muted {
+  color: var(--muted);
+}
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.filename {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.status-good {
+  color: var(--good);
+}
+.status-critical {
+  color: var(--critical);
+  font-weight: 600;
+}
+
+.toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding-top: 12px;
+}
+
+/* ── Drop zone & controls ────────────────────────────────────────────────── */
+
+.drop {
+  background: var(--surface);
+  border: 1.5px dashed var(--rule);
+  border-radius: 10px;
+  padding: 44px 24px;
+  text-align: center;
+  transition: border-color 0.15s ease;
+}
+
+.drop-active {
+  border-color: var(--ink-2);
+}
+
+.drop-title {
+  margin: 0 0 14px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.drop-note {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+button {
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--ink);
+  color: var(--plane);
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.password-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0 0;
+}
+
+.password-form input {
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--rule);
+  background: var(--plane);
+  color: var(--ink);
+  min-width: 220px;
+}
