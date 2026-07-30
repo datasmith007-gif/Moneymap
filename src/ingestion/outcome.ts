@@ -17,8 +17,10 @@ export type ParseOutcome =
   | UnreadableOutcome
   | EncryptedOutcome;
 
-/** Fully parsed and internally consistent enough to hand on. Reconciliation
- *  (§1.2) still runs downstream before anything is persisted. */
+/** Fully parsed. A `parsed` outcome from a bank parser is not yet reconciled; the
+ *  `parseStatement` facade runs the reconciliation gate (§1.2) over it and
+ *  downgrades it to `needs_review` if the figures do not add up, so a `parsed`
+ *  outcome *from the facade* is both parsed and reconciled. */
 export interface ParsedOutcome {
   readonly kind: 'parsed';
   readonly statement: ParsedStatement;
