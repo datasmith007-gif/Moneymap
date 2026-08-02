@@ -32,3 +32,45 @@ export function formatPaise(paise: Paise): string {
 export function formatSignedPaise(paise: Paise): string {
   return paise < 0 ? formatPaise(paise) : `+${formatPaise(paise)}`;
 }
+
+/**
+ * The mean of `total` over `n` months, in whole paise.
+ *
+ * **This is the only place in the codebase where a money figure is divided.**
+ * Every other aggregate is integer addition, min, or max, and therefore exact;
+ * an average cannot be, so the rounding rule is pinned to one function that can
+ * be tested rather than repeated at each call site.
+ *
+ * Rounds half **away from zero**, not `Math.round`. `Math.round` breaks ties
+ * toward +∞, so it turns −2.5 into −2 but +2.5 into +3 — an average monthly
+ * saving of −₹0.005 and one of +₹0.005 would round to different magnitudes.
+ * Money rounding has to be symmetric about zero, or a month of small losses and
+ * a month of small gains stop being mirror images.
+ *
+ * Computed as `floor((2·|total| + n) / 2n)` on integers, so no float is ever
+ * involved and no precision is lost for large totals.
+ */
+export function meanPaise(total: Paise, n: number): Paise {
+  if (n <= 0) throw new Error(`meanPaise: n must be positive, got ${n}`);
+  const magnitude = Math.floor((2 * Math.abs(total) + n) / (2 * n));
+  return total < 0 ? -magnitude : magnitude;
+}
+
+const COMPACT = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 });
+
+/**
+ * Abbreviated rupees for chart axis ticks: 12000000 → "₹1.2L", 250000000 → "₹2.5Cr".
+ *
+ * Lossy by design, and therefore **only for axis ticks** — never for a figure a
+ * user might check against their statement. Those use `formatPaise`, which is
+ * exact. Uses the Indian lakh/crore scale rather than K/M because the reader is
+ * reading a rupee amount.
+ */
+export function formatPaiseCompact(paise: Paise): string {
+  const sign = paise < 0 ? '−' : '';
+  const rupees = Math.abs(paise) / 100;
+  if (rupees >= 1_00_00_000) return `${sign}₹${COMPACT.format(rupees / 1_00_00_000)}Cr`;
+  if (rupees >= 1_00_000) return `${sign}₹${COMPACT.format(rupees / 1_00_000)}L`;
+  if (rupees >= 1_000) return `${sign}₹${COMPACT.format(rupees / 1_000)}K`;
+  return `${sign}₹${COMPACT.format(rupees)}`;
+}

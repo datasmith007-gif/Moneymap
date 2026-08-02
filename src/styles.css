@@ -17,6 +17,11 @@
   --critical: #d03b3b;
   --good-wash: rgba(12, 163, 12, 0.08);
   --critical-wash: rgba(208, 59, 59, 0.08);
+  /* Categorical slots 1 and 2, for chart series only. Distinct from the status
+     pair above on purpose: a status colour must never stand in for a series, or
+     "money out" would read as "something is wrong". */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
   color-scheme: light;
 }
 
@@ -33,6 +38,9 @@
     --critical: #e66767;
     --good-wash: rgba(12, 163, 12, 0.12);
     --critical-wash: rgba(230, 103, 103, 0.12);
+    /* The same two hues re-stepped for the dark surface, not a second palette. */
+    --series-1: #3987e5;
+    --series-2: #d95926;
     color-scheme: dark;
   }
 }
@@ -359,4 +367,200 @@ button:disabled {
   background: var(--plane);
   color: var(--ink);
   min-width: 220px;
+}
+
+/* ── Tabs & page actions ─────────────────────────────────────────────────── */
+
+.tabs {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.tab {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--ink-2);
+  font-size: 14px;
+  padding: 6px 14px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.tab-active {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tab-count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  background: var(--border);
+  border-radius: 20px;
+  padding: 1px 7px;
+}
+
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.page-actions .segmented {
+  margin-left: auto;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.segment {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+  padding: 6px 12px;
+}
+
+.segment-active {
+  background: var(--ink);
+  color: var(--plane);
+  font-weight: 600;
+}
+
+/* ── Hero + KPI row ──────────────────────────────────────────────────────── */
+
+.hero {
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  margin: 4px 0 2px !important;
+  color: var(--ink) !important;
+}
+
+.hero-sub {
+  font-size: 13px;
+  color: var(--muted) !important;
+  margin: 0 0 18px !important;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.kpi-label {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kpi-flag {
+  color: var(--critical);
+  font-weight: 700;
+  cursor: help;
+}
+
+.kpi-value {
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.kpi-range {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Caveats ─────────────────────────────────────────────────────────────── */
+
+.caveat {
+  font-size: 12.5px;
+  color: var(--ink-2) !important;
+  margin: 12px 0 0 !important;
+  padding: 9px 12px;
+  border-radius: 7px;
+  background: var(--border);
+  display: flex;
+  gap: 8px;
+}
+
+.caveat-warning {
+  background: var(--critical-wash);
+}
+
+/* ── Charts ──────────────────────────────────────────────────────────────── */
+
+.chart {
+  height: 280px;
+  width: 100%;
+}
+
+.tooltip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.tooltip p {
+  margin: 0 0 3px;
+  color: var(--ink) !important;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tooltip-title {
+  font-weight: 600;
+  margin-bottom: 6px !important;
+}
+
+.tooltip-note {
+  color: var(--muted) !important;
+  font-size: 11.5px;
+  margin-top: 5px !important;
+}
+
+.swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.swatch-1 {
+  background: var(--series-1);
+}
+
+.swatch-2 {
+  background: var(--series-2);
 }

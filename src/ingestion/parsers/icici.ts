@@ -5,6 +5,7 @@ import type { ParseOutcome } from '../outcome.ts';
 import { documentLines, type Line } from '../layout.ts';
 import { firstParsed, hasLabels, headerX, joinText, splitColumns } from '../columns.ts';
 import { parseDmyDate, parseIndianAmount, parseMonthNameDate } from '../fields.ts';
+import { accountKey } from '../../model/identity.ts';
 
 /**
  * Parser for ICICI consolidated account statements (the "DATE | MODE | PARTICULARS
@@ -70,11 +71,14 @@ export class IciciParser implements BankParser {
       .reduce((min, i) => Math.min(min, i), lines.length);
     const topHeaderY = columnHeaderYByPage(lines);
 
+    const identifierMasked = maskAccount(savings.accountNumber);
     const account: Account = {
-      id: `${ctx.statementId}:account`,
+      // Content-derived, not import-derived: the same bank account must get the
+      // same id every upload, or the store cannot recognise a re-import.
+      id: accountKey(this.bankName, identifierMasked),
       type: 'savings',
       institution: this.bankName,
-      identifierMasked: maskAccount(savings.accountNumber),
+      identifierMasked,
       currency: 'INR',
       isLiability: false,
       source: 'upload',

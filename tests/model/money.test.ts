@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { formatPaise, formatSignedPaise } from '../../src/model/money.ts';
+import {
+  formatPaise,
+  formatPaiseCompact,
+  formatSignedPaise,
+  meanPaise,
+} from '../../src/model/money.ts';
 
 describe('formatPaise', () => {
   it('groups rupees the Indian way and always shows two decimals', () => {
@@ -23,5 +28,52 @@ describe('formatPaise', () => {
     expect(formatSignedPaise(10000)).toBe('+100.00');
     expect(formatSignedPaise(-10000)).toBe('−100.00');
     expect(formatSignedPaise(0)).toBe('+0.00');
+  });
+});
+
+describe('meanPaise', () => {
+  it('divides exactly when it can', () => {
+    expect(meanPaise(30000, 3)).toBe(10000);
+    expect(meanPaise(0, 5)).toBe(0);
+  });
+
+  it('rounds halves away from zero, symmetrically', () => {
+    // The whole reason this isn't Math.round: Math.round(-2.5) is -2 but
+    // Math.round(2.5) is 3, so equal-and-opposite averages would round to
+    // different magnitudes.
+    expect(meanPaise(5, 2)).toBe(3);
+    expect(meanPaise(-5, 2)).toBe(-3);
+    expect(meanPaise(7, 2)).toBe(4);
+    expect(meanPaise(-7, 2)).toBe(-4);
+  });
+
+  it('rounds ordinary fractions to the nearest paise', () => {
+    expect(meanPaise(10, 3)).toBe(3); // 3.33
+    expect(meanPaise(11, 3)).toBe(4); // 3.67
+    expect(meanPaise(-10, 3)).toBe(-3);
+  });
+
+  it('is the identity at n = 1', () => {
+    expect(meanPaise(12345, 1)).toBe(12345);
+    expect(meanPaise(-12345, 1)).toBe(-12345);
+  });
+
+  it('refuses a non-positive divisor rather than returning Infinity', () => {
+    expect(() => meanPaise(100, 0)).toThrow();
+    expect(() => meanPaise(100, -1)).toThrow();
+  });
+});
+
+describe('formatPaiseCompact', () => {
+  it('uses the lakh/crore scale', () => {
+    expect(formatPaiseCompact(12000000)).toBe('₹1.2L');
+    expect(formatPaiseCompact(2500000000)).toBe('₹2.5Cr');
+    expect(formatPaiseCompact(500000)).toBe('₹5K');
+    expect(formatPaiseCompact(45000)).toBe('₹450');
+    expect(formatPaiseCompact(0)).toBe('₹0');
+  });
+
+  it('marks negatives', () => {
+    expect(formatPaiseCompact(-12000000)).toBe('−₹1.2L');
   });
 });
