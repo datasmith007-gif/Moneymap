@@ -262,6 +262,12 @@ body {
   background: var(--critical-wash);
 }
 
+/* The statement whose full report is open below the queue. A neutral tint, not
+   a status colour — selection is not a verdict. */
+.row-selected td {
+  background: var(--plane);
+}
+
 .nowrap {
   white-space: nowrap;
 }
