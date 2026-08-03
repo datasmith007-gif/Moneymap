@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  addDays,
   addMonths,
   daysBetween,
   daysInMonth,
@@ -94,6 +95,25 @@ describe('daysBetween', () => {
 
   it('ignores any time component the string carries', () => {
     expect(daysBetween('2025-08-10T23:59:59Z', '2025-08-11T00:00:01Z')).toBe(1);
+  });
+});
+
+describe('addDays', () => {
+  it('moves in both directions across month and year boundaries', () => {
+    expect(addDays('2025-08-31', 1)).toBe('2025-09-01');
+    expect(addDays('2026-01-01', -1)).toBe('2025-12-31');
+    expect(addDays('2025-06-15', 0)).toBe('2025-06-15');
+  });
+
+  it('handles leap days and larger shifts', () => {
+    expect(addDays('2024-02-28', 1)).toBe('2024-02-29');
+    expect(addDays('2024-02-28', 2)).toBe('2024-03-01');
+    expect(addDays('2025-03-01', -1)).toBe('2025-02-28');
+    expect(addDays('2024-01-01', 366)).toBe('2025-01-01');
+  });
+
+  it('rejects fractional day shifts', () => {
+    expect(() => addDays('2025-01-01', 1.5)).toThrow(RangeError);
   });
 });
 

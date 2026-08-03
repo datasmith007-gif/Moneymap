@@ -43,10 +43,7 @@ describe('resolveRange', () => {
 
   it('anchors to the newest imported month, not to today', () => {
     // The user imported last year's statements; the window must land on the data.
-    const range = resolveRange(
-      [record({ periodStart: '2024-01-01', periodEnd: '2024-06-30' })],
-      3,
-    );
+    const range = resolveRange([record({ periodStart: '2024-01-01', periodEnd: '2024-06-30' })], 3);
     expect(range).toEqual({ from: '2024-04', to: '2024-06' });
   });
 
@@ -91,8 +88,18 @@ describe('net position', () => {
     const dashboard = ready({
       accounts: [axis],
       imports: [
-        record({ statementId: 'a', periodStart: '2025-01-01', periodEnd: '2025-03-31', closingBalance: 100000 }),
-        record({ statementId: 'b', periodStart: '2025-02-01', periodEnd: '2025-04-30', closingBalance: 250000 }),
+        record({
+          statementId: 'a',
+          periodStart: '2025-01-01',
+          periodEnd: '2025-03-31',
+          closingBalance: 100000,
+        }),
+        record({
+          statementId: 'b',
+          periodStart: '2025-02-01',
+          periodEnd: '2025-04-30',
+          closingBalance: 250000,
+        }),
       ],
       transactions: [],
     });
@@ -102,7 +109,12 @@ describe('net position', () => {
   });
 
   it('is unaffected by the order statements were imported in', () => {
-    const older = record({ statementId: 'a', periodEnd: '2025-07-31', closingBalance: 100000 });
+    const older = record({
+      statementId: 'a',
+      periodStart: '2025-07-01',
+      periodEnd: '2025-07-31',
+      closingBalance: 100000,
+    });
     const newer = record({ statementId: 'b', periodEnd: '2025-08-31', closingBalance: 250000 });
 
     const forward = ready({ accounts: [axis], imports: [older, newer], transactions: [] });
@@ -118,7 +130,12 @@ describe('net position', () => {
       accounts: [axis, icici],
       imports: [
         record({ accountId: axis.id, periodEnd: '2025-08-31' }),
-        record({ accountId: icici.id, statementId: 's2', periodStart: '2025-05-01', periodEnd: '2025-05-31' }),
+        record({
+          accountId: icici.id,
+          statementId: 's2',
+          periodStart: '2025-05-01',
+          periodEnd: '2025-05-31',
+        }),
       ],
       transactions: [],
     });
@@ -128,7 +145,11 @@ describe('net position', () => {
   });
 
   it('counts a liability against the total', () => {
-    const card = account({ institution: 'Axis Bank', identifierMasked: 'XXXX9999', isLiability: true });
+    const card = account({
+      institution: 'Axis Bank',
+      identifierMasked: 'XXXX9999',
+      isLiability: true,
+    });
     const dashboard = ready({
       accounts: [axis, card],
       imports: [
@@ -142,7 +163,10 @@ describe('net position', () => {
   });
 
   it('leaves a non-rupee account out of the total and names it', () => {
-    const foreign = { ...account({ institution: 'Foreign', identifierMasked: 'XXXX1111' }), currency: 'USD' as unknown as 'INR' };
+    const foreign = {
+      ...account({ institution: 'Foreign', identifierMasked: 'XXXX1111' }),
+      currency: 'USD' as unknown as 'INR',
+    };
     const dashboard = ready({
       accounts: [axis, foreign],
       imports: [
@@ -162,7 +186,9 @@ describe('monthly coverage', () => {
     const dashboard = ready({
       accounts: [axis],
       imports: [record({ periodStart: '2025-07-01', periodEnd: '2025-08-31' })],
-      transactions: [txn({ accountId: axis.id, date: '2025-08-10', type: 'credit', amount: 50000 })],
+      transactions: [
+        txn({ accountId: axis.id, date: '2025-08-10', type: 'credit', amount: 50000 }),
+      ],
     });
 
     const july = dashboard.flows.find((flow) => flow.month === '2025-07');
@@ -200,7 +226,9 @@ describe('monthly coverage', () => {
     const dashboard = ready({
       accounts: [axis],
       imports: [record({ periodStart: '2025-07-15', periodEnd: '2025-08-31' })],
-      transactions: [txn({ accountId: axis.id, date: '2025-08-10', type: 'credit', amount: 60000 })],
+      transactions: [
+        txn({ accountId: axis.id, date: '2025-08-10', type: 'credit', amount: 60000 }),
+      ],
     });
 
     expect(dashboard.flows.find((flow) => flow.month === '2025-07')?.coverage).toBe('partial');
@@ -230,8 +258,18 @@ describe('monthly coverage', () => {
     const dashboard = ready({
       accounts: [axis, icici],
       imports: [
-        record({ accountId: axis.id, statementId: 'a', periodStart: '2025-07-01', periodEnd: '2025-08-31' }),
-        record({ accountId: icici.id, statementId: 'b', periodStart: '2025-08-01', periodEnd: '2025-08-31' }),
+        record({
+          accountId: axis.id,
+          statementId: 'a',
+          periodStart: '2025-07-01',
+          periodEnd: '2025-08-31',
+        }),
+        record({
+          accountId: icici.id,
+          statementId: 'b',
+          periodStart: '2025-08-01',
+          periodEnd: '2025-08-31',
+        }),
       ],
       transactions: [],
     });
@@ -290,7 +328,9 @@ describe('averages', () => {
     const dashboard = ready({
       accounts: [axis],
       imports: [record({ periodStart: '2025-08-01', periodEnd: '2025-08-31' })],
-      transactions: [txn({ accountId: axis.id, date: '2025-08-10', type: 'credit', amount: 50000 })],
+      transactions: [
+        txn({ accountId: axis.id, date: '2025-08-10', type: 'credit', amount: 50000 }),
+      ],
     });
 
     expect(dashboard.averages.income.months).toBe(1);
@@ -337,7 +377,9 @@ describe('reconciliation with the underlying rows', () => {
       transactions,
     });
 
-    const credits = transactions.filter((t) => t.type === 'credit').reduce((n, t) => n + t.amount, 0);
+    const credits = transactions
+      .filter((t) => t.type === 'credit')
+      .reduce((n, t) => n + t.amount, 0);
     const debits = transactions.filter((t) => t.type === 'debit').reduce((n, t) => n + t.amount, 0);
 
     expect(dashboard.flows.reduce((n, f) => n + f.inflow, 0)).toBe(credits);
@@ -357,11 +399,39 @@ describe('internal transfers', () => {
       accounts: [axis, icici],
       imports: bothAccounts,
       transactions: [
-        txn({ id: 'salary', accountId: axis.id, date: '2025-08-01', type: 'credit', amount: 1_00_000_00, description: 'SALARY AUG' }),
-        txn({ id: 'food', accountId: axis.id, date: '2025-08-04', type: 'debit', amount: 1_200_00, description: 'UPI SWIGGY' }),
+        txn({
+          id: 'salary',
+          accountId: axis.id,
+          date: '2025-08-01',
+          type: 'credit',
+          amount: 1_00_000_00,
+          description: 'SALARY AUG',
+        }),
+        txn({
+          id: 'food',
+          accountId: axis.id,
+          date: '2025-08-04',
+          type: 'debit',
+          amount: 1_200_00,
+          description: 'UPI SWIGGY',
+        }),
         // The pair: ₹50,000 leaves Axis and arrives at ICICI a day later.
-        txn({ id: 'out', accountId: axis.id, date: '2025-08-10', type: 'debit', amount: 50_000_00, description: 'NEFT TFR' }),
-        txn({ id: 'in', accountId: icici.id, date: '2025-08-11', type: 'credit', amount: 50_000_00, description: 'NEFT CR' }),
+        txn({
+          id: 'out',
+          accountId: axis.id,
+          date: '2025-08-10',
+          type: 'debit',
+          amount: 50_000_00,
+          description: 'NEFT TFR',
+        }),
+        txn({
+          id: 'in',
+          accountId: icici.id,
+          date: '2025-08-11',
+          type: 'credit',
+          amount: 50_000_00,
+          description: 'NEFT CR',
+        }),
       ],
     });
 
@@ -377,8 +447,22 @@ describe('internal transfers', () => {
       accounts: [axis],
       imports: [record()],
       transactions: [
-        txn({ id: 'a', accountId: axis.id, date: '2025-08-10', type: 'debit', amount: 900_00, description: 'POS PURCHASE' }),
-        txn({ id: 'b', accountId: axis.id, date: '2025-08-10', type: 'credit', amount: 900_00, description: 'POS REVERSAL' }),
+        txn({
+          id: 'a',
+          accountId: axis.id,
+          date: '2025-08-10',
+          type: 'debit',
+          amount: 900_00,
+          description: 'POS PURCHASE',
+        }),
+        txn({
+          id: 'b',
+          accountId: axis.id,
+          date: '2025-08-10',
+          type: 'credit',
+          amount: 900_00,
+          description: 'POS REVERSAL',
+        }),
       ],
     });
 
@@ -392,9 +476,30 @@ describe('internal transfers', () => {
       accounts: [axis, icici],
       imports: bothAccounts,
       transactions: [
-        txn({ id: 'food', accountId: axis.id, date: '2025-08-04', type: 'debit', amount: 1_000_00, description: 'UPI SWIGGY' }),
-        txn({ id: 'out', accountId: axis.id, date: '2025-08-10', type: 'debit', amount: 50_000_00, description: 'NEFT TFR' }),
-        txn({ id: 'in', accountId: icici.id, date: '2025-08-11', type: 'credit', amount: 50_000_00, description: 'NEFT CR' }),
+        txn({
+          id: 'food',
+          accountId: axis.id,
+          date: '2025-08-04',
+          type: 'debit',
+          amount: 1_000_00,
+          description: 'UPI SWIGGY',
+        }),
+        txn({
+          id: 'out',
+          accountId: axis.id,
+          date: '2025-08-10',
+          type: 'debit',
+          amount: 50_000_00,
+          description: 'NEFT TFR',
+        }),
+        txn({
+          id: 'in',
+          accountId: icici.id,
+          date: '2025-08-11',
+          type: 'credit',
+          amount: 50_000_00,
+          description: 'NEFT CR',
+        }),
       ],
     });
 
@@ -415,9 +520,30 @@ describe('spend by category', () => {
       accounts: [axis],
       imports: [record()],
       transactions: [
-        txn({ id: 'a', accountId: axis.id, date: '2025-08-02', type: 'debit', amount: 6_000_00, description: 'UPI SWIGGY' }),
-        txn({ id: 'b', accountId: axis.id, date: '2025-08-03', type: 'debit', amount: 2_000_00, description: 'UPI BIGBASKET' }),
-        txn({ id: 'c', accountId: axis.id, date: '2025-08-04', type: 'debit', amount: 2_000_00, description: 'REF 8812' }),
+        txn({
+          id: 'a',
+          accountId: axis.id,
+          date: '2025-08-02',
+          type: 'debit',
+          amount: 6_000_00,
+          description: 'UPI SWIGGY',
+        }),
+        txn({
+          id: 'b',
+          accountId: axis.id,
+          date: '2025-08-03',
+          type: 'debit',
+          amount: 2_000_00,
+          description: 'UPI BIGBASKET',
+        }),
+        txn({
+          id: 'c',
+          accountId: axis.id,
+          date: '2025-08-04',
+          type: 'debit',
+          amount: 2_000_00,
+          description: 'REF 8812',
+        }),
       ],
     });
 
@@ -444,8 +570,22 @@ describe('savings rate', () => {
       accounts: [axis],
       imports: [record()],
       transactions: [
-        txn({ id: 'a', accountId: axis.id, date: '2025-08-01', type: 'credit', amount: 1_00_000_00, description: 'SALARY' }),
-        txn({ id: 'b', accountId: axis.id, date: '2025-08-05', type: 'debit', amount: 75_000_00, description: 'UPI SWIGGY' }),
+        txn({
+          id: 'a',
+          accountId: axis.id,
+          date: '2025-08-01',
+          type: 'credit',
+          amount: 1_00_000_00,
+          description: 'SALARY',
+        }),
+        txn({
+          id: 'b',
+          accountId: axis.id,
+          date: '2025-08-05',
+          type: 'debit',
+          amount: 75_000_00,
+          description: 'UPI SWIGGY',
+        }),
       ],
     });
 
@@ -487,8 +627,20 @@ describe('caveats', () => {
       accounts: [axis],
       imports: [record()],
       transactions: [
-        txn({ id: 't1', date: '2025-08-05', type: 'debit', amount: 50_000, description: 'UPI/SWIGGY/123/PAY' }),
-        txn({ id: 't2', date: '2025-08-06', type: 'debit', amount: 50_000, description: 'REF 99812734' }),
+        txn({
+          id: 't1',
+          date: '2025-08-05',
+          type: 'debit',
+          amount: 50_000,
+          description: 'UPI/SWIGGY/123/PAY',
+        }),
+        txn({
+          id: 't2',
+          date: '2025-08-06',
+          type: 'debit',
+          amount: 50_000,
+          description: 'REF 99812734',
+        }),
       ],
     });
 
@@ -515,7 +667,12 @@ describe('caveats', () => {
         accounts: [axis, icici],
         imports: [
           record({ accountId: axis.id, periodStart: '2025-08-01', periodEnd: '2025-08-31' }),
-          record({ accountId: icici.id, statementId: 's2', periodStart: '2025-01-01', periodEnd: '2025-01-31' }),
+          record({
+            accountId: icici.id,
+            statementId: 's2',
+            periodStart: '2025-01-01',
+            periodEnd: '2025-01-31',
+          }),
         ],
         transactions: [],
       },
@@ -523,9 +680,9 @@ describe('caveats', () => {
     );
 
     expect(dashboard.caveats.map((c) => c.id)).toContain('stale_data');
-    expect(dashboard.netPosition.accounts.find((a) => a.accountId === icici.id)?.staleForWindow).toBe(
-      true,
-    );
+    expect(
+      dashboard.netPosition.accounts.find((a) => a.accountId === icici.id)?.staleForWindow,
+    ).toBe(true);
   });
 });
 

@@ -4,6 +4,7 @@ import { classifyById, EMPTY_CONTEXT, type ClassifyContext } from '../enrichment
 import { categoryLabel, type CategoryId } from '../enrichment/taxonomy.ts';
 import type { Classification } from '../enrichment/types.ts';
 import { meanPaise } from '../model/money.ts';
+import { coveredDays } from './coverage.ts';
 import {
   addMonths,
   daysInMonth,
@@ -279,10 +280,7 @@ export async function loadDashboard(
 }
 
 /** Pure. Every dashboard figure originates here. */
-export function aggregate(
-  input: AggregationInput,
-  options: AggregateOptions,
-): DashboardState {
+export function aggregate(input: AggregationInput, options: AggregateOptions): DashboardState {
   const range = resolveRange(input.imports, options.window);
   if (range === null) return { kind: 'empty' };
 
@@ -308,7 +306,10 @@ export function aggregate(
     spendByCategory,
     coverage,
     savingsRate: computeSavingsRate(averages),
-    monthsSinceLatestStatement: monthsBetween(monthOf(netPosition.newestAsOf), monthOf(options.today)),
+    monthsSinceLatestStatement: monthsBetween(
+      monthOf(netPosition.newestAsOf),
+      monthOf(options.today),
+    ),
     caveats: buildCaveats(netPosition, averages, coverage, input.imports, options.window),
   };
 }
@@ -331,9 +332,7 @@ export function aggregate(
  *    proved the rows bridge it. Re-deriving would produce a *different* figure
  *    whenever dedup skipped a row that an overlapping statement also carried.
  */
-function latestImportPerAccount(
-  imports: readonly ImportRecord[],
-): Map<string, ImportRecord> {
+function latestImportPerAccount(imports: readonly ImportRecord[]): Map<string, ImportRecord> {
   const latest = new Map<string, ImportRecord>();
   for (const record of imports) {
     const held = latest.get(record.accountId);
@@ -415,41 +414,6 @@ function computeNetPosition(
 
 // ── Monthly flows and coverage ──────────────────────────────────────────────
 
-/**
- * How many days of `month` an account's statements actually cover.
- *
- * The day-ranges are *unioned*, not summed. Overlapping statement periods are
- * the normal case (Jan–Mar and Feb–Apr both cover February), and summing them
- * would report February as 56 days covered — which would then read as
- * "complete" for the wrong reason. Both endpoints are clamped inside the month
- * first, so this is plain integer arithmetic on day numbers with no cross-month
- * date handling anywhere.
- */
-function coveredDays(month: MonthKey, records: readonly ImportRecord[]): number {
-  const { start, end } = monthBounds(month);
-  const spans: { from: number; to: number }[] = [];
-
-  for (const record of records) {
-    if (record.periodEnd < start || record.periodStart > end) continue;
-    const from = Number((record.periodStart > start ? record.periodStart : start).slice(8, 10));
-    const to = Number((record.periodEnd < end ? record.periodEnd : end).slice(8, 10));
-    spans.push({ from, to });
-  }
-  if (spans.length === 0) return 0;
-
-  spans.sort((a, b) => a.from - b.from);
-  let days = 0;
-  let cursor = 0; // last day already counted
-  for (const span of spans) {
-    const from = Math.max(span.from, cursor + 1);
-    if (span.to >= from) {
-      days += span.to - from + 1;
-      cursor = span.to;
-    }
-  }
-  return days;
-}
-
 function computeFlows(
   months: readonly MonthKey[],
   input: AggregationInput,
@@ -482,12 +446,13 @@ function computeFlows(
   return months.map((month) => {
     const bucket = totals.get(month)!;
     const expected = daysInMonth(month);
+    const bounds = monthBounds(month);
     const missingAccounts: string[] = [];
     let anyCovered = false;
     let allComplete = true;
 
     for (const account of input.accounts) {
-      const days = coveredDays(month, importsByAccount.get(account.id) ?? []);
+      const days = coveredDays(bounds.start, bounds.end, importsByAccount.get(account.id) ?? []);
       if (days > 0) anyCovered = true;
       if (days < expected) {
         allComplete = false;
@@ -536,8 +501,7 @@ function statOf(values: readonly Paise[]): WindowStat {
   // than the rounded one so the rounding does not bias the spread; this is the
   // only float path in the engine, and its result is display-only.
   const exactMean = total / values.length;
-  const variance =
-    values.reduce((sum, value) => sum + (value - exactMean) ** 2, 0) / values.length;
+  const variance = values.reduce((sum, value) => sum + (value - exactMean) ** 2, 0) / values.length;
 
   return { mean, min, max, stdDev: Math.round(Math.sqrt(variance)), months: values.length };
 }
@@ -620,17 +584,19 @@ function computeSpendByCategory(
     buckets.set(category, bucket);
   }
 
-  return [...buckets.entries()]
-    .map(([category, { total, count }]) => ({
-      category,
-      label: categoryLabel(category),
-      total,
-      txnCount: count,
-      share: totalSpend === 0 ? 0 : total / totalSpend,
-    }))
-    // Descending by amount, then by id so equal totals never reorder between
-    // runs — a chart whose bars swap places on refresh looks broken.
-    .sort((a, b) => b.total - a.total || a.category.localeCompare(b.category));
+  return (
+    [...buckets.entries()]
+      .map(([category, { total, count }]) => ({
+        category,
+        label: categoryLabel(category),
+        total,
+        txnCount: count,
+        share: totalSpend === 0 ? 0 : total / totalSpend,
+      }))
+      // Descending by amount, then by id so equal totals never reorder between
+      // runs — a chart whose bars swap places on refresh looks broken.
+      .sort((a, b) => b.total - a.total || a.category.localeCompare(b.category))
+  );
 }
 
 function computeCoverage(

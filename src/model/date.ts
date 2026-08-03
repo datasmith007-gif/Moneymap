@@ -111,9 +111,74 @@ export function daysBetween(from: string, to: string): number {
   return dayIndex(to) - dayIndex(from);
 }
 
+/**
+ * Shift an ISO date by whole calendar days without a timezone-bearing `Date`.
+ *
+ * The implementation jumps across month boundaries rather than stepping one
+ * day at a time, so large statement gaps remain cheap while leap handling stays
+ * centralized in `daysInMonth`.
+ */
+export function addDays(isoDate: string, amount: number): string {
+  if (!Number.isInteger(amount))
+    throw new RangeError(`addDays: amount must be an integer, got ${amount}`);
+
+  let year = Number(isoDate.slice(0, 4));
+  let month = Number(isoDate.slice(5, 7));
+  let day = Number(isoDate.slice(8, 10));
+  let remaining = amount;
+
+  while (remaining > 0) {
+    const available = daysInMonth(monthKey(year, month)) - day;
+    if (remaining <= available) {
+      day += remaining;
+      remaining = 0;
+    } else {
+      remaining -= available + 1;
+      month++;
+      if (month === 13) {
+        year++;
+        month = 1;
+      }
+      day = 1;
+    }
+  }
+
+  while (remaining < 0) {
+    const available = day - 1;
+    if (-remaining <= available) {
+      day += remaining;
+      remaining = 0;
+    } else {
+      remaining += available + 1;
+      month--;
+      if (month === 0) {
+        year--;
+        month = 12;
+      }
+      day = daysInMonth(monthKey(year, month));
+    }
+  }
+
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function monthKey(year: number, month: number): MonthKey {
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`;
+}
+
 const MONTH_NAMES = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ] as const;
 
 function monthName(month: MonthKey): string {
