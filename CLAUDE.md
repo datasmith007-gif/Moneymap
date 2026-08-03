@@ -10,7 +10,8 @@ Anything about *what* we're building — features, the data model, scope, versio
 |------|-------|
 | Product vision, architecture, canonical data model, version split, per-feature design | [Personal Finance Organiser — Planning Document](https://app.notion.com/p/39a65a498a9780b0aa18d166368c8d2b) |
 | Milestones, sequencing, blocking decisions | [Project Planner](https://app.notion.com/p/39e65a498a9781b4b9eaf23bfe2f401d) |
-| Feature specs | `features/` |
+| What is built, what is next, and the constraints that came out of building it | [`docs/ROADMAP.md`](docs/ROADMAP.md) |
+| A session-by-session record of what changed | [Worklog](https://app.notion.com/p/3a065a498a9781348a65db6605ecd213) |
 
 When this file and a planning doc disagree, **the planning doc wins** and this file is the bug.
 
@@ -68,7 +69,7 @@ moneymap/
 │   ├── pages/        # Views
 │   └── hooks/        # State + data access
 ├── tests/
-├── features/         # Feature specs
+├── docs/             # ROADMAP.md — state, next steps, constraints
 ├── index.html
 └── package.json
 ```

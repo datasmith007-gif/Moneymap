@@ -7,17 +7,19 @@ import { useRef, useState } from 'react';
  */
 
 export interface FileDropProps {
-  readonly onFile: (file: File) => void;
+  readonly onFiles: (files: readonly File[]) => void;
   readonly busy: boolean;
 }
 
-export function FileDrop({ onFile, busy }: FileDropProps) {
+export function FileDrop({ onFiles, busy }: FileDropProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
   function take(files: FileList | null) {
-    const file = files?.[0];
-    if (file) onFile(file);
+    // Every dropped file, not just the first. A year of statements is the
+    // realistic way someone arrives at this screen.
+    const chosen = files === null ? [] : [...files];
+    if (chosen.length > 0) onFiles(chosen);
   }
 
   return (
@@ -38,6 +40,7 @@ export function FileDrop({ onFile, busy }: FileDropProps) {
         ref={inputRef}
         type="file"
         accept="application/pdf,.pdf"
+        multiple
         hidden
         onChange={(e) => {
           take(e.target.files);
@@ -45,13 +48,15 @@ export function FileDrop({ onFile, busy }: FileDropProps) {
           e.target.value = '';
         }}
       />
-      <p className="drop-title">{busy ? 'Reading the statement…' : 'Drop a statement PDF here'}</p>
+      <p className="drop-title">
+        {busy ? 'Reading your statements…' : 'Drop your statement PDFs here'}
+      </p>
       <button type="button" onClick={() => inputRef.current?.click()} disabled={busy}>
-        Choose a file
+        Choose files
       </button>
       <p className="drop-note">
-        Parsed on this device, in memory. Nothing is uploaded, and nothing is kept once you close
-        the tab.
+        Drop as many as you like — password-protected files are welcome. Parsed on this device, in
+        memory. Nothing is uploaded, and nothing is kept once you close the tab.
       </p>
     </div>
   );

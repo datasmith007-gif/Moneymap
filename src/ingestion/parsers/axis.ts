@@ -5,6 +5,7 @@ import type { NeedsReviewOutcome, ParseOutcome } from '../outcome.ts';
 import { documentLines, type Line } from '../layout.ts';
 import { firstParsed, hasLabels, headerX, joinText, splitColumns } from '../columns.ts';
 import { parseDmyDate, parseIndianAmount } from '../fields.ts';
+import { accountKey } from '../../model/identity.ts';
 
 /**
  * Parser for Axis Bank savings/salary account statements (the "Tran Date | Chq No
@@ -72,11 +73,14 @@ export class AxisParser implements BankParser {
       return unreadableFallback('Could not read the Axis account number or period.');
     }
 
+    const identifierMasked = maskAccount(meta.accountNumber);
     const account: Account = {
-      id: `${ctx.statementId}:account`,
+      // Content-derived, not import-derived: the same bank account must get the
+      // same id every upload, or the store cannot recognise a re-import.
+      id: accountKey(this.bankName, identifierMasked),
       type: 'savings',
       institution: this.bankName,
-      identifierMasked: maskAccount(meta.accountNumber),
+      identifierMasked,
       currency: 'INR',
       isLiability: false,
       source: 'upload',
@@ -138,9 +142,6 @@ export class AxisParser implements BankParser {
         amount: debit ?? credit ?? 0,
         balanceAfter: cells.balance,
         description: narration,
-        category: null,
-        counterparty: null,
-        isInternalTransfer: false,
         provenance: { statementId: ctx.statementId, page: line.page, rawLine: narration },
       });
     }
