@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import type { ParsedStatement } from '../model/canonical.ts';
+import type { Account, ParsedStatement } from '../model/canonical.ts';
 import { createMemoryStore } from '../storage/memoryStore.ts';
 import type { ImportMeta, ImportRecord, ImportSummary, Store } from '../storage/store.ts';
 
@@ -23,6 +23,9 @@ export interface SessionStore {
   readonly revision: number;
   /** Import metadata for the header and the import list. */
   readonly imports: readonly ImportRecord[];
+  /** Every account seen, so the import list can name one without each caller
+   *  re-reading the store to turn an `accountId` into a bank and a mask. */
+  readonly accounts: readonly Account[];
   readonly record: (statement: ParsedStatement, meta: ImportMeta) => Promise<ImportSummary>;
   readonly clear: () => Promise<void>;
 }
@@ -34,13 +37,19 @@ export function useSessionStore(): SessionStore {
 
   const [revision, setRevision] = useState(0);
   const [imports, setImports] = useState<readonly ImportRecord[]>([]);
+  const [accounts, setAccounts] = useState<readonly Account[]>([]);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
 
   const record = useCallback(
     (statement: ParsedStatement, meta: ImportMeta): Promise<ImportSummary> => {
       const next = queue.current.then(async () => {
         const summary = await store.putStatement(statement, meta);
-        setImports(await store.listImports());
+        const [nextImports, nextAccounts] = await Promise.all([
+          store.listImports(),
+          store.listAccounts(),
+        ]);
+        setImports(nextImports);
+        setAccounts(nextAccounts);
         setRevision((n) => n + 1);
         return summary;
       });
@@ -55,8 +64,9 @@ export function useSessionStore(): SessionStore {
   const clear = useCallback(async () => {
     await store.clear();
     setImports([]);
+    setAccounts([]);
     setRevision((n) => n + 1);
   }, [store]);
 
-  return { store, revision, imports, record, clear };
+  return { store, revision, imports, accounts, record, clear };
 }

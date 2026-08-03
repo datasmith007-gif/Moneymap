@@ -1,4 +1,6 @@
 import type { Account, ParsedStatement, Transaction } from '../model/canonical.ts';
+import type { CategoryId } from '../enrichment/taxonomy.ts';
+import type { Rule } from '../enrichment/types.ts';
 import { statementKey, transactionKey } from '../model/identity.ts';
 import type {
   ImportMeta,
@@ -29,6 +31,11 @@ export function createMemoryStore(): Store {
   /** Keyed by `transactionKey`. The presence set that makes writes idempotent. */
   const rowKeys = new Set<string>();
   const transactions: Transaction[] = [];
+  /** User-authored. Nothing in `putStatement` touches either of these — an
+   *  import cannot reach a manual edit, which is how the "overrides survive a
+   *  re-import" guarantee is kept. */
+  const overrides = new Map<string, CategoryId>();
+  const rules = new Map<string, Rule>();
 
   return {
     async putStatement(statement: ParsedStatement, meta: ImportMeta): Promise<ImportSummary> {
@@ -113,12 +120,37 @@ export function createMemoryStore(): Store {
         );
     },
 
+    async putOverride(transactionId: string, category: CategoryId | null) {
+      if (category === null) overrides.delete(transactionId);
+      else overrides.set(transactionId, category);
+    },
+
+    async listOverrides() {
+      return new Map(overrides);
+    },
+
+    async putRule(rule: Rule) {
+      rules.set(rule.id, rule);
+    },
+
+    async deleteRule(ruleId: string) {
+      rules.delete(ruleId);
+    },
+
+    async listRules() {
+      // Sorted by the same total order the matcher uses, so a caller that
+      // renders this list sees the sequence rules actually fire in.
+      return [...rules.values()].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+    },
+
     async clear() {
       accounts.clear();
       imports.length = 0;
       statementIds.clear();
       rowKeys.clear();
       transactions.length = 0;
+      overrides.clear();
+      rules.clear();
     },
   };
 }

@@ -1,5 +1,8 @@
 import type { Account, Paise, Transaction } from '../model/canonical.ts';
 import type { ImportRecord, Store } from '../storage/store.ts';
+import { classifyById, EMPTY_CONTEXT, type ClassifyContext } from '../enrichment/classify.ts';
+import { categoryLabel, type CategoryId } from '../enrichment/taxonomy.ts';
+import type { Classification } from '../enrichment/types.ts';
 import { meanPaise } from '../model/money.ts';
 import {
   addMonths,
@@ -21,12 +24,13 @@ import {
  * tested at all. Components below this module render values; they never derive
  * them.
  *
- * What this module deliberately does NOT do, because the data cannot support it:
- * category breakdowns, an investment-vs-liquid split, and self-transfer
- * exclusion. All three need `Transaction.category` / `isInternalTransfer`, which
- * both parsers hardcode to `null` / `false` until Feature 2 exists. Rather than
- * compute something that looks like those numbers, the engine emits a caveat
- * naming what is missing.
+ * Classification runs here rather than being passed in. The dependency flow is
+ * Parsing → Store → Classification → Aggregation, and `classify` is pure, so
+ * calling it keeps the module's promise intact — every figure below originates
+ * in this file, from inputs a test can supply.
+ *
+ * Still not supported, because the data cannot carry it: an investment-vs-liquid
+ * split, which needs `Instrument` / `Holding` from the non-bank scope.
  */
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -121,9 +125,37 @@ export interface NetPosition {
   readonly excluded: readonly { readonly accountId: string; readonly reason: 'currency' }[];
 }
 
+export interface CategoryTotal {
+  readonly category: CategoryId;
+  /** Resolved here so every consumer prints the same wording. */
+  readonly label: string;
+  readonly total: Paise;
+  readonly txnCount: number;
+  /** Fraction of total spend in range, 0..1. The engine's answer to "forty
+   *  paise of every rupee" — computed, never re-derived by a component. */
+  readonly share: number;
+}
+
+/**
+ * How much of the range's spend actually carries a label.
+ *
+ * Published because it is the honest denominator for every category figure: a
+ * breakdown covering 60% of spend says something very different from one
+ * covering 98%, and the reader cannot tell which they are looking at without
+ * this.
+ */
+export interface ClassificationCoverage {
+  readonly classifiedCount: number;
+  readonly unclassifiedCount: number;
+  /** Spend that fell into `unclassified` — the figure the breakdown omits. */
+  readonly unclassifiedSpend: Paise;
+  /** Share of spend that is labelled, 0..1. */
+  readonly rate: number;
+}
+
 export interface Caveat {
   readonly id:
-    | 'self_transfers'
+    | 'unclassified_spend'
     | 'stale_data'
     | 'flagged_statements'
     | 'single_month'
@@ -148,6 +180,16 @@ export interface Dashboard {
   readonly flows: readonly MonthFlow[];
   readonly cumulative: readonly CumulativePoint[];
   readonly averages: Averages;
+  /** Spend by category over the range, largest first. Internal transfers and
+   *  unclassified rows are excluded; `coverage` says how much that leaves out. */
+  readonly spendByCategory: readonly CategoryTotal[];
+  readonly coverage: ClassificationCoverage;
+  /**
+   * Savings as a share of income over the counted months, 0..1, or `null` when
+   * no income was recorded (a rate with a zero denominator is not 0%, it is
+   * unanswerable — and printing 0% would read as "you saved nothing").
+   */
+  readonly savingsRate: number | null;
   /** Months between the newest statement and `today` — the staleness the wall
    *  clock is responsible for, kept separate from window selection. */
   readonly monthsSinceLatestStatement: number;
@@ -168,6 +210,9 @@ export interface AggregateOptions {
   /** ISO date. Used ONLY for the "your data ends N months ago" notice — never to
    *  choose the window. Injected so tests are deterministic. */
   readonly today: string;
+  /** The user's rules and overrides. Omitted means shipped rules only, which is
+   *  what a session with no user input should see. */
+  readonly classification?: ClassifyContext;
 }
 
 // ── Entry points ────────────────────────────────────────────────────────────
@@ -211,7 +256,7 @@ export async function loadDashboard(
   const range = resolveRange(imports, options.window);
   if (range === null) return { kind: 'empty' };
 
-  const [accounts, transactions] = await Promise.all([
+  const [accounts, transactions, rules, overrides] = await Promise.all([
     store.listAccounts(),
     // Range-bounded on purpose: the V2 SQLite adapter would scan the whole table
     // otherwise. Derived from the same `resolveRange` call the aggregate uses, so
@@ -220,9 +265,17 @@ export async function loadDashboard(
       from: monthBounds(range.from).start,
       to: monthBounds(range.to).end,
     }),
+    store.listRules(),
+    store.listOverrides(),
   ]);
 
-  return aggregate({ accounts, imports, transactions }, options);
+  // The caller's own classification context wins if it supplied one; otherwise
+  // the store's is the truth. Reading it here rather than in `aggregate` keeps
+  // the aggregate pure and the store access in the one async function.
+  return aggregate(
+    { accounts, imports, transactions },
+    { ...options, classification: options.classification ?? { rules, overrides } },
+  );
 }
 
 /** Pure. Every dashboard figure originates here. */
@@ -233,11 +286,15 @@ export function aggregate(
   const range = resolveRange(input.imports, options.window);
   if (range === null) return { kind: 'empty' };
 
+  const labels = classifyById(input.transactions, options.classification ?? EMPTY_CONTEXT);
+
   const months = monthsInRange(range.from, range.to);
   const netPosition = computeNetPosition(input.accounts, input.imports, range.from);
-  const flows = computeFlows(months, input);
+  const flows = computeFlows(months, input, labels);
   const averages = computeAverages(flows);
   const cumulative = computeCumulative(flows);
+  const spendByCategory = computeSpendByCategory(input.transactions, labels, months);
+  const coverage = computeCoverage(input.transactions, labels, months);
 
   return {
     kind: 'ready',
@@ -248,8 +305,11 @@ export function aggregate(
     flows,
     cumulative,
     averages,
+    spendByCategory,
+    coverage,
+    savingsRate: computeSavingsRate(averages),
     monthsSinceLatestStatement: monthsBetween(monthOf(netPosition.newestAsOf), monthOf(options.today)),
-    caveats: buildCaveats(netPosition, averages, input.imports, options.window),
+    caveats: buildCaveats(netPosition, averages, coverage, input.imports, options.window),
   };
 }
 
@@ -390,7 +450,11 @@ function coveredDays(month: MonthKey, records: readonly ImportRecord[]): number 
   return days;
 }
 
-function computeFlows(months: readonly MonthKey[], input: AggregationInput): MonthFlow[] {
+function computeFlows(
+  months: readonly MonthKey[],
+  input: AggregationInput,
+  labels: ReadonlyMap<string, Classification>,
+): MonthFlow[] {
   const importsByAccount = new Map<string, ImportRecord[]>();
   for (const record of input.imports) {
     const list = importsByAccount.get(record.accountId);
@@ -406,6 +470,10 @@ function computeFlows(months: readonly MonthKey[], input: AggregationInput): Mon
   for (const txn of input.transactions) {
     const bucket = totals.get(monthOf(txn.date));
     if (bucket === undefined) continue; // outside the window
+    // A transfer between the user's own accounts is the same rupee seen twice.
+    // Counting it would add its amount to both income and spend — the very
+    // distortion this engine used to carry a standing caveat about.
+    if (labels.get(txn.id)?.isInternalTransfer === true) continue;
     if (txn.type === 'credit') bucket.inflow += txn.amount;
     else bucket.outflow += txn.amount;
     bucket.count++;
@@ -507,36 +575,138 @@ function computeCumulative(flows: readonly MonthFlow[]): CumulativePoint[] {
     });
 }
 
+// ── Categories ──────────────────────────────────────────────────────────────
+
+/** Debits inside the range that count as spend — not transfers, not credits. */
+function spendRows(
+  transactions: readonly Transaction[],
+  labels: ReadonlyMap<string, Classification>,
+  months: readonly MonthKey[],
+): { readonly txn: Transaction; readonly label: Classification | undefined }[] {
+  const inRange = new Set(months);
+  return transactions
+    .filter((txn) => txn.type === 'debit' && inRange.has(monthOf(txn.date)))
+    .map((txn) => ({ txn, label: labels.get(txn.id) }))
+    .filter(({ label }) => label?.isInternalTransfer !== true);
+}
+
+/**
+ * Spend grouped by label, largest first.
+ *
+ * `unclassified` is excluded from the list rather than shown as a bar, and
+ * surfaces in `ClassificationCoverage` instead. A bar labelled "Unclassified"
+ * competing with real categories invites the reader to treat it as a spending
+ * habit; it is a gap in the data, and it belongs where gaps are reported.
+ *
+ * `share` is over *all* spend, including the unclassified part, so the shares
+ * sum to the coverage rate rather than to 1. Normalising over classified spend
+ * alone would make a category look larger the less the app understood.
+ */
+function computeSpendByCategory(
+  transactions: readonly Transaction[],
+  labels: ReadonlyMap<string, Classification>,
+  months: readonly MonthKey[],
+): CategoryTotal[] {
+  const rows = spendRows(transactions, labels, months);
+  const totalSpend = rows.reduce((sum, { txn }) => sum + txn.amount, 0);
+
+  const buckets = new Map<CategoryId, { total: Paise; count: number }>();
+  for (const { txn, label } of rows) {
+    const category = label?.category ?? 'unclassified';
+    if (category === 'unclassified') continue;
+    const bucket = buckets.get(category) ?? { total: 0, count: 0 };
+    bucket.total += txn.amount;
+    bucket.count++;
+    buckets.set(category, bucket);
+  }
+
+  return [...buckets.entries()]
+    .map(([category, { total, count }]) => ({
+      category,
+      label: categoryLabel(category),
+      total,
+      txnCount: count,
+      share: totalSpend === 0 ? 0 : total / totalSpend,
+    }))
+    // Descending by amount, then by id so equal totals never reorder between
+    // runs — a chart whose bars swap places on refresh looks broken.
+    .sort((a, b) => b.total - a.total || a.category.localeCompare(b.category));
+}
+
+function computeCoverage(
+  transactions: readonly Transaction[],
+  labels: ReadonlyMap<string, Classification>,
+  months: readonly MonthKey[],
+): ClassificationCoverage {
+  const rows = spendRows(transactions, labels, months);
+  let unclassifiedCount = 0;
+  let unclassifiedSpend = 0;
+  let totalSpend = 0;
+
+  for (const { txn, label } of rows) {
+    totalSpend += txn.amount;
+    if (label === undefined || label.category === 'unclassified') {
+      unclassifiedCount++;
+      unclassifiedSpend += txn.amount;
+    }
+  }
+
+  return {
+    classifiedCount: rows.length - unclassifiedCount,
+    unclassifiedCount,
+    unclassifiedSpend,
+    rate: totalSpend === 0 ? 1 : (totalSpend - unclassifiedSpend) / totalSpend,
+  };
+}
+
+/**
+ * Savings as a share of income, over the months the averages counted.
+ *
+ * Built from the two means rather than from monthly rates averaged together:
+ * a mean of ratios weights a ₹10,000 month the same as a ₹2,00,000 one, which
+ * is not what "your savings rate" means to anyone.
+ */
+function computeSavingsRate(averages: Averages): number | null {
+  if (averages.income.months === 0 || averages.income.mean === 0) return null;
+  return averages.savings.mean / averages.income.mean;
+}
+
 // ── Caveats ─────────────────────────────────────────────────────────────────
 
 /**
  * What the reader must know for these numbers to be read correctly.
  *
- * Each caveat names the figures it actually affects. The self-transfer caveat is
- * the one that matters most and is the most easily over-applied: a transfer
- * between the user's own accounts adds its amount to *both* income and spend, so
- * those two are inflated — but savings, monthly net, and the net position are
- * unaffected whenever both legs are imported, because the transfer cancels
- * within the month. Warning about all four equally would be wrong and would
- * teach the reader to skip the warning.
+ * Each caveat names the figures it actually affects; an undifferentiated warning
+ * painted on everything teaches the reader to ignore it.
+ *
+ * The standing self-transfer caveat that used to head this list is **gone** —
+ * transfers between the user's own accounts are now detected and excluded from
+ * both income and spend, so the warning it carried is no longer true. What
+ * replaces it is narrower and conditional: a note about how much spend carries
+ * no label, which is the honest limit on the category breakdown rather than on
+ * the totals.
  */
 function buildCaveats(
   netPosition: NetPosition,
   averages: Averages,
+  coverage: ClassificationCoverage,
   imports: readonly ImportRecord[],
   window: WindowSize,
 ): Caveat[] {
-  const caveats: Caveat[] = [
-    {
-      id: 'self_transfers',
-      text:
-        'Transfers between your own accounts are counted as both income and spend — ' +
-        'they are not detected yet. Savings and net position are unaffected when both ' +
-        'accounts are imported, because the transfer cancels out.',
-      severity: 'warning',
-      affects: ['income', 'spend'],
-    },
-  ];
+  const caveats: Caveat[] = [];
+
+  // A tenth of spend unlabelled is the point where the breakdown stops being a
+  // fair picture of where money went. Below that the gap is worth showing in the
+  // coverage figure but not worth a warning.
+  if (coverage.unclassifiedCount > 0 && coverage.rate < 0.9) {
+    const percent = Math.round((1 - coverage.rate) * 100);
+    caveats.push({
+      id: 'unclassified_spend',
+      text: `${percent}% of spend (${coverage.unclassifiedCount} transaction${coverage.unclassifiedCount === 1 ? '' : 's'}) has no category yet, so the breakdown below does not account for all of it. Totals and net position are unaffected.`,
+      severity: 'note',
+      affects: ['spend'],
+    });
+  }
 
   const counted = averages.monthsCounted.length;
   if (counted === 1) {

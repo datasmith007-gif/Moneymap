@@ -91,12 +91,19 @@ export interface Transaction {
   /** Free-text narration as printed (UPI/NEFT/ATM strings, cheque refs, …). */
   readonly description: string;
   /**
-   * Enrichment fields (Feature 2) — a parser leaves these at their defaults.
-   * Present in the type now so enrichment is additive, not a schema change.
+   * No enrichment fields live here, deliberately.
+   *
+   * Category, counterparty and the internal-transfer flag were once reserved on
+   * this type so Feature 2 could fill them in place. Building it showed that to
+   * be the wrong shape: a user's label must survive a re-import (the project
+   * constraint is that overrides are stored separately and source data is never
+   * rewritten), and re-running classification after a rule edit would otherwise
+   * mean rewriting stored rows. Enrichment therefore produces a `Classification`
+   * *beside* each transaction, keyed by id — see `src/enrichment/classify.ts`.
+   *
+   * Leaving the fields here as permanent nulls would have created a second,
+   * always-wrong source of truth for the same three questions.
    */
-  readonly category: string | null;
-  readonly counterparty: string | null;
-  readonly isInternalTransfer: boolean;
   readonly provenance: Provenance;
 }
 

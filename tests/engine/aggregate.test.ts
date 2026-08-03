@@ -345,19 +345,157 @@ describe('reconciliation with the underlying rows', () => {
   });
 });
 
+describe('internal transfers', () => {
+  /** One statement per account, both covering August in full. */
+  const bothAccounts = [
+    record({ statementId: 's1', accountId: axis.id }),
+    record({ statementId: 's2', accountId: icici.id }),
+  ];
+
+  it('excludes both legs of a transfer from income and spend', () => {
+    const withTransfer = ready({
+      accounts: [axis, icici],
+      imports: bothAccounts,
+      transactions: [
+        txn({ id: 'salary', accountId: axis.id, date: '2025-08-01', type: 'credit', amount: 1_00_000_00, description: 'SALARY AUG' }),
+        txn({ id: 'food', accountId: axis.id, date: '2025-08-04', type: 'debit', amount: 1_200_00, description: 'UPI SWIGGY' }),
+        // The pair: ₹50,000 leaves Axis and arrives at ICICI a day later.
+        txn({ id: 'out', accountId: axis.id, date: '2025-08-10', type: 'debit', amount: 50_000_00, description: 'NEFT TFR' }),
+        txn({ id: 'in', accountId: icici.id, date: '2025-08-11', type: 'credit', amount: 50_000_00, description: 'NEFT CR' }),
+      ],
+    });
+
+    const august = withTransfer.flows.find((f) => f.month === '2025-08')!;
+    // Neither leg counted: income is the salary alone, spend the lunch alone.
+    expect(august.inflow).toBe(1_00_000_00);
+    expect(august.outflow).toBe(1_200_00);
+    expect(august.txnCount).toBe(2);
+  });
+
+  it('keeps a same-account credit and debit that merely share an amount', () => {
+    const noTransfer = ready({
+      accounts: [axis],
+      imports: [record()],
+      transactions: [
+        txn({ id: 'a', accountId: axis.id, date: '2025-08-10', type: 'debit', amount: 900_00, description: 'POS PURCHASE' }),
+        txn({ id: 'b', accountId: axis.id, date: '2025-08-10', type: 'credit', amount: 900_00, description: 'POS REVERSAL' }),
+      ],
+    });
+
+    const august = noTransfer.flows.find((f) => f.month === '2025-08')!;
+    expect(august.inflow).toBe(900_00);
+    expect(august.outflow).toBe(900_00);
+  });
+
+  it('leaves a transfer out of the category breakdown entirely', () => {
+    const dashboard = ready({
+      accounts: [axis, icici],
+      imports: bothAccounts,
+      transactions: [
+        txn({ id: 'food', accountId: axis.id, date: '2025-08-04', type: 'debit', amount: 1_000_00, description: 'UPI SWIGGY' }),
+        txn({ id: 'out', accountId: axis.id, date: '2025-08-10', type: 'debit', amount: 50_000_00, description: 'NEFT TFR' }),
+        txn({ id: 'in', accountId: icici.id, date: '2025-08-11', type: 'credit', amount: 50_000_00, description: 'NEFT CR' }),
+      ],
+    });
+
+    expect(dashboard.spendByCategory).toHaveLength(1);
+    expect(dashboard.spendByCategory[0]).toMatchObject({
+      category: 'food_dining',
+      total: 1_000_00,
+      txnCount: 1,
+      // The transfer is not in the denominator either — it is not spend at all.
+      share: 1,
+    });
+  });
+});
+
+describe('spend by category', () => {
+  it('ranks categories by amount and shares them over all spend', () => {
+    const dashboard = ready({
+      accounts: [axis],
+      imports: [record()],
+      transactions: [
+        txn({ id: 'a', accountId: axis.id, date: '2025-08-02', type: 'debit', amount: 6_000_00, description: 'UPI SWIGGY' }),
+        txn({ id: 'b', accountId: axis.id, date: '2025-08-03', type: 'debit', amount: 2_000_00, description: 'UPI BIGBASKET' }),
+        txn({ id: 'c', accountId: axis.id, date: '2025-08-04', type: 'debit', amount: 2_000_00, description: 'REF 8812' }),
+      ],
+    });
+
+    expect(dashboard.spendByCategory.map((c) => c.category)).toEqual(['food_dining', 'groceries']);
+    expect(dashboard.spendByCategory[0]?.label).toBe('Food & dining');
+    // 6,000 of 10,000 total spend — the unclassified 2,000 stays in the
+    // denominator, so a category cannot look bigger the less we understand.
+    expect(dashboard.spendByCategory[0]?.share).toBeCloseTo(0.6, 10);
+    expect(dashboard.coverage.rate).toBeCloseTo(0.8, 10);
+    expect(dashboard.coverage.unclassifiedSpend).toBe(2_000_00);
+    expect(dashboard.coverage.unclassifiedCount).toBe(1);
+  });
+
+  it('reports full coverage rather than dividing by zero when there is no spend', () => {
+    const dashboard = ready({ accounts: [axis], imports: [record()], transactions: [] });
+    expect(dashboard.spendByCategory).toEqual([]);
+    expect(dashboard.coverage.rate).toBe(1);
+  });
+});
+
+describe('savings rate', () => {
+  it('is savings over income across the counted months', () => {
+    const dashboard = ready({
+      accounts: [axis],
+      imports: [record()],
+      transactions: [
+        txn({ id: 'a', accountId: axis.id, date: '2025-08-01', type: 'credit', amount: 1_00_000_00, description: 'SALARY' }),
+        txn({ id: 'b', accountId: axis.id, date: '2025-08-05', type: 'debit', amount: 75_000_00, description: 'UPI SWIGGY' }),
+      ],
+    });
+
+    expect(dashboard.savingsRate).toBeCloseTo(0.25, 10);
+  });
+
+  it('is null rather than 0% when no income was recorded', () => {
+    // A zero denominator is unanswerable; printing 0% would read as "you saved
+    // nothing", which is a different and wrong claim.
+    const dashboard = ready({
+      accounts: [axis],
+      imports: [record()],
+      transactions: [
+        txn({ id: 'b', accountId: axis.id, date: '2025-08-05', type: 'debit', amount: 5_000_00 }),
+      ],
+    });
+
+    expect(dashboard.savingsRate).toBeNull();
+  });
+});
+
 describe('caveats', () => {
-  it('always warns that self-transfers are not excluded, and only about the figures they inflate', () => {
+  it('no longer carries a standing self-transfer warning', () => {
     const dashboard = ready({
       accounts: [axis],
       imports: [record()],
       transactions: [],
     });
 
-    const caveat = dashboard.caveats.find((c) => c.id === 'self_transfers');
+    // Transfers are detected and excluded now, so the caveat the engine used to
+    // emit unconditionally would be claiming a distortion that no longer exists.
+    expect(dashboard.caveats.map((c) => c.id)).not.toContain('unclassified_spend');
+    expect(dashboard.caveats.every((c) => c.id !== ('self_transfers' as string))).toBe(true);
+  });
+
+  it('notes unclassified spend only once it is material', () => {
+    // One recognised merchant, one narration nothing can label: 50% unlabelled.
+    const dashboard = ready({
+      accounts: [axis],
+      imports: [record()],
+      transactions: [
+        txn({ id: 't1', date: '2025-08-05', type: 'debit', amount: 50_000, description: 'UPI/SWIGGY/123/PAY' }),
+        txn({ id: 't2', date: '2025-08-06', type: 'debit', amount: 50_000, description: 'REF 99812734' }),
+      ],
+    });
+
+    const caveat = dashboard.caveats.find((c) => c.id === 'unclassified_spend');
     expect(caveat).toBeDefined();
-    // Savings and net position cancel out when both legs are imported, so
-    // warning about them too would be wrong and would dilute the warning.
-    expect(caveat?.affects).toEqual(['income', 'spend']);
+    expect(caveat?.affects).toEqual(['spend']);
+    expect(caveat?.severity).toBe('note');
   });
 
   it('warns when a statement was flagged during import', () => {

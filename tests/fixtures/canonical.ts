@@ -33,9 +33,6 @@ export function txn(
     accountId: account().id,
     balanceAfter: null,
     description: 'test row',
-    category: null,
-    counterparty: null,
-    isInternalTransfer: false,
     provenance: { statementId: 'test', page: 1, rawLine: '' },
     ...over,
   };

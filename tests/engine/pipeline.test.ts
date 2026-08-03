@@ -88,6 +88,46 @@ describe('parser → store → dashboard', () => {
     expect(after.averages).toEqual(before.averages);
   });
 
+  it('classifies imported rows on the way to the dashboard', async () => {
+    const store = createMemoryStore();
+    await importDoc(store, new AxisParser(), axisSyntheticDoc(), 'axis-1');
+
+    const dashboard = await loadDashboard(store, OPTIONS);
+    if (dashboard.kind !== 'ready') throw new Error('expected a ready dashboard');
+
+    // Whatever the fixture's narrations are, the engine must publish a coherent
+    // breakdown: every category total is real spend, and the shares are a
+    // fraction of all spend rather than of the labelled part.
+    const labelled = dashboard.spendByCategory.reduce((sum, c) => sum + c.total, 0);
+    const allSpend = labelled + dashboard.coverage.unclassifiedSpend;
+    expect(allSpend).toBe(dashboard.flows.reduce((sum, f) => sum + f.outflow, 0));
+    expect(dashboard.spendByCategory.every((c) => c.category !== 'unclassified')).toBe(true);
+    expect(dashboard.coverage.rate).toBeCloseTo(allSpend === 0 ? 1 : labelled / allSpend, 10);
+  });
+
+  it("applies the user's stored rules and overrides", async () => {
+    const store = createMemoryStore();
+    await importDoc(store, new AxisParser(), axisSyntheticDoc(), 'axis-1');
+
+    const before = await loadDashboard(store, OPTIONS);
+    if (before.kind !== 'ready') throw new Error('expected a ready dashboard');
+
+    // A rule that claims every debit in the fixture, whatever it says.
+    const debits = (await store.listTransactions({})).filter((t) => t.type === 'debit');
+    for (const row of debits) await store.putOverride(row.id, 'entertainment');
+
+    const after = await loadDashboard(store, OPTIONS);
+    if (after.kind !== 'ready') throw new Error('expected a ready dashboard');
+
+    expect(after.coverage.unclassifiedCount).toBe(0);
+    expect(after.spendByCategory.map((c) => c.category)).toEqual(
+      debits.length > 0 ? ['entertainment'] : [],
+    );
+    // Overrides change the breakdown, never the totals.
+    expect(after.flows.map((f) => f.outflow)).toEqual(before.flows.map((f) => f.outflow));
+    expect(after.netPosition.total).toBe(before.netPosition.total);
+  });
+
   it('gives the same account the same id across separate parses', async () => {
     const first = new AxisParser().parse(axisSyntheticDoc(), {
       statementId: 'one',

@@ -1,10 +1,24 @@
 import type { Account, Paise, ParsedStatement, Transaction } from '../model/canonical.ts';
+import type { CategoryId } from '../enrichment/taxonomy.ts';
+import type { Rule } from '../enrichment/types.ts';
 
 /**
  * The storage seam (planning doc §5.1, overview "Storage Adapter"). Every feature
  * reads and writes through this interface; nothing above it may know whether — or
  * where — data persists. V1 is in-memory and session-scoped, V2 is SQLite over
  * OPFS, and the point of the seam is that swapping them is additive.
+ *
+ * The store holds **two classes of record**, and the distinction is the whole
+ * reason the second half of this interface exists:
+ *
+ *  - **Derived from source** — accounts, transactions, imports. Written only by
+ *    an import, never edited, reproducible by re-parsing the same PDF.
+ *  - **User-authored** — category overrides and rules. Written only by the user,
+ *    and **never touched by an import.** The project constraint is that source
+ *    data is never deleted and overrides are stored separately, so that
+ *    re-importing a statement cannot lose a manual edit. Keeping them in one
+ *    store but as distinct records is what makes that guarantee cheap: an import
+ *    has no code path that can reach them.
  *
  * Three commitments the shape encodes:
  *
@@ -41,7 +55,31 @@ export interface Store {
    */
   listTransactions(query: TransactionQuery): Promise<readonly Transaction[]>;
 
-  /** Drop everything. The session's "start over". */
+  // ── User-authored records ────────────────────────────────────────────────
+
+  /**
+   * Set or clear the user's label for one transaction.
+   *
+   * `null` clears it, returning the row to whatever classification computes for
+   * it. Clearing is a separate outcome from labelling it `unclassified`: one
+   * says "work it out yourself", the other says "I looked, and there is no good
+   * label" — and re-running the rules must only undo the first.
+   */
+  putOverride(transactionId: string, category: CategoryId | null): Promise<void>;
+
+  /** Every override, keyed by transaction id — the shape `classify` takes. */
+  listOverrides(): Promise<ReadonlyMap<string, CategoryId>>;
+
+  /** Add or replace a rule, by `id`. */
+  putRule(rule: Rule): Promise<void>;
+
+  deleteRule(ruleId: string): Promise<void>;
+
+  /** The user's rules. Shipped rules are not stored — they ship with the code,
+   *  so persisting a copy would let the two versions drift. */
+  listRules(): Promise<readonly Rule[]>;
+
+  /** Drop everything, both classes of record. The session's "start over". */
   clear(): Promise<void>;
 }
 

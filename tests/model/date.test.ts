@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   addMonths,
+  daysBetween,
   daysInMonth,
   formatIsoDate,
   formatMonth,
@@ -66,6 +67,33 @@ describe('monthBounds', () => {
     expect(monthBounds('2025-02')).toEqual({ start: '2025-02-01', end: '2025-02-28' });
     expect(monthBounds('2024-02')).toEqual({ start: '2024-02-01', end: '2024-02-29' });
     expect(monthBounds('2025-12')).toEqual({ start: '2025-12-01', end: '2025-12-31' });
+  });
+});
+
+describe('daysBetween', () => {
+  it('counts days forward and backward', () => {
+    expect(daysBetween('2025-08-10', '2025-08-13')).toBe(3);
+    expect(daysBetween('2025-08-13', '2025-08-10')).toBe(-3);
+    expect(daysBetween('2025-08-10', '2025-08-10')).toBe(0);
+  });
+
+  it('crosses months and years without a special case', () => {
+    expect(daysBetween('2025-08-31', '2025-09-01')).toBe(1);
+    expect(daysBetween('2025-12-31', '2026-01-01')).toBe(1);
+    expect(daysBetween('2025-01-01', '2026-01-01')).toBe(365);
+  });
+
+  it('gets leap years right', () => {
+    // 2024 is a leap year, 1900 is not, 2000 is.
+    expect(daysBetween('2024-02-28', '2024-03-01')).toBe(2);
+    expect(daysBetween('2025-02-28', '2025-03-01')).toBe(1);
+    expect(daysBetween('2024-01-01', '2025-01-01')).toBe(366);
+    expect(daysBetween('1900-02-28', '1900-03-01')).toBe(1);
+    expect(daysBetween('2000-02-28', '2000-03-01')).toBe(2);
+  });
+
+  it('ignores any time component the string carries', () => {
+    expect(daysBetween('2025-08-10T23:59:59Z', '2025-08-11T00:00:01Z')).toBe(1);
   });
 });
 

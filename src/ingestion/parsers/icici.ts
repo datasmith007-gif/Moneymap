@@ -147,9 +147,6 @@ export class IciciParser implements BankParser {
         amount: (isCredit ? a.deposit : a.withdrawal) ?? 0,
         balanceAfter: a.balance,
         description: orderedNarration(a),
-        category: null,
-        counterparty: null,
-        isInternalTransfer: false,
         provenance: { statementId: ctx.statementId, page: a.page, rawLine: orderedNarration(a) },
       };
     });

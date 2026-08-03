@@ -3,6 +3,7 @@ import { useStatementImport } from '../hooks/useStatementImport.ts';
 import { FileDrop } from '../components/FileDrop.tsx';
 import { StatementReport } from '../components/StatementReport.tsx';
 import { PasswordPrompt } from '../components/PasswordPrompt.tsx';
+import { ImportedList } from '../components/ImportedList.tsx';
 import type { ParseOutcome } from '../ingestion/outcome.ts';
 import type { ParsedStatement } from '../model/canonical.ts';
 import type { ImportSummary } from '../storage/store.ts';
@@ -89,6 +90,14 @@ export function ImportPage({ session }: { readonly session: SessionStore }) {
           onRecord={(statement) => void record(statement)}
         />
       )}
+
+      {/*
+        Rendered last but shown in every state, including `idle`. Resetting the
+        view to import another statement must not make the ones already imported
+        look lost — they are still in the store and still counted, and before
+        this panel existed nothing on the screen said so.
+      */}
+      <ImportedList imports={session.imports} accounts={session.accounts} />
     </>
   );
 }

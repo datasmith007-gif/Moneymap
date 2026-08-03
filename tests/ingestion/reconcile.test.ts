@@ -22,9 +22,6 @@ function txn(over: Partial<Transaction> & Pick<Transaction, 'date' | 'type' | 'a
     id: 'x',
     accountId: 'a',
     description: '',
-    category: null,
-    counterparty: null,
-    isInternalTransfer: false,
     provenance: { statementId: 'test', page: 1, rawLine: '' },
     ...over,
   };

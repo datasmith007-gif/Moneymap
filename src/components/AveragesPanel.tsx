@@ -47,9 +47,9 @@ export function AveragesPanel({
       </header>
 
       <div className="kpis">
-        <Kpi label="Average income" stat={averages.income} caveats={caveats} affects="income" />
-        <Kpi label="Average spend" stat={averages.spend} caveats={caveats} affects="spend" />
-        <Kpi label="Average savings" stat={averages.savings} caveats={caveats} affects="savings" />
+        <Kpi label="Average income" stat={averages.income} />
+        <Kpi label="Average spend" stat={averages.spend} />
+        <Kpi label="Average savings" stat={averages.savings} />
       </div>
 
       {averages.monthsExcluded.length > 0 && (
@@ -81,31 +81,16 @@ export function AveragesPanel({
 function Kpi({
   label,
   stat,
-  caveats,
-  affects,
 }: {
   readonly label: string;
   readonly stat: WindowStat;
-  readonly caveats: readonly Caveat[];
-  readonly affects: 'income' | 'spend' | 'savings';
 }) {
-  const inflated = caveats.some(
-    (caveat) => caveat.id === 'self_transfers' && caveat.affects.includes(affects),
-  );
-
+  // No inflation marker any more: transfers between the user's own accounts are
+  // detected and excluded before these figures are computed, so the "~" this
+  // tile used to carry would now be claiming a distortion that isn't there.
   return (
     <div className="kpi">
-      <span className="kpi-label">
-        {label}
-        {/* Marks only the figures self-transfers actually inflate. Painting the
-            same warning on all three would train the reader to skip it. */}
-        {inflated && (
-          <span className="kpi-flag" title="Includes transfers between your own accounts">
-            {' '}
-            ~
-          </span>
-        )}
-      </span>
+      <span className="kpi-label">{label}</span>
       <span className="kpi-value">{formatPaise(stat.mean)}</span>
       {stat.months > 1 ? (
         <span className="kpi-range">

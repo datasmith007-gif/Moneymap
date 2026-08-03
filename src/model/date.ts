@@ -78,6 +78,39 @@ export function monthBounds(month: MonthKey): { readonly start: string; readonly
   };
 }
 
+/**
+ * Days since 1970-01-01 — the day-level twin of `monthIndex`, and for the same
+ * reason: it turns date arithmetic into integer arithmetic, so leap years and
+ * month lengths stop being special cases.
+ *
+ * This is Howard Hinnant's `days_from_civil`, which shifts the year to start in
+ * March so the leap day lands at the end of the year and needs no branch at all.
+ * The `146097` is the days in a 400-year Gregorian era; `719468` re-bases the
+ * result from era zero onto the Unix epoch.
+ *
+ * Written out rather than delegated to `Date` for the reason at the top of this
+ * file: `new Date('2025-08-01')` reads back as 31 July anywhere west of UTC.
+ */
+function dayIndex(isoDate: string): number {
+  const year = Number(isoDate.slice(0, 4));
+  const month = Number(isoDate.slice(5, 7));
+  const day = Number(isoDate.slice(8, 10));
+
+  const shiftedYear = month <= 2 ? year - 1 : year;
+  const era = Math.floor(shiftedYear / 400);
+  const yearOfEra = shiftedYear - era * 400;
+  const dayOfYear = Math.floor((153 * (month + (month > 2 ? -3 : 9)) + 2) / 5) + day - 1;
+  const dayOfEra =
+    yearOfEra * 365 + Math.floor(yearOfEra / 4) - Math.floor(yearOfEra / 100) + dayOfYear;
+
+  return era * 146097 + dayOfEra - 719468;
+}
+
+/** How many days from `from` to `to`; negative if `to` is earlier. */
+export function daysBetween(from: string, to: string): number {
+  return dayIndex(to) - dayIndex(from);
+}
+
 const MONTH_NAMES = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',

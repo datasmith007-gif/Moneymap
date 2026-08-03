@@ -142,9 +142,6 @@ export class AxisParser implements BankParser {
         amount: debit ?? credit ?? 0,
         balanceAfter: cells.balance,
         description: narration,
-        category: null,
-        counterparty: null,
-        isInternalTransfer: false,
         provenance: { statementId: ctx.statementId, page: line.page, rawLine: narration },
       });
     }

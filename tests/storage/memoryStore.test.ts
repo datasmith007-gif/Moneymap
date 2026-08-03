@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createMemoryStore } from '../../src/storage/memoryStore.ts';
 import type { ImportMeta } from '../../src/storage/store.ts';
+import type { Rule } from '../../src/enrichment/types.ts';
 import { account, statement, txn } from '../fixtures/canonical.ts';
 
 const axis = account({ institution: 'Axis Bank', identifierMasked: 'XXXX4567' });
@@ -243,5 +244,97 @@ describe('memory store — reading', () => {
     expect(await store.listTransactions({})).toHaveLength(0);
     expect(await store.listAccounts()).toHaveLength(0);
     expect(await store.listImports()).toHaveLength(0);
+  });
+});
+
+describe('user-authored records', () => {
+  const shopping = 'shopping' as const;
+
+  function rule(over: Partial<Rule> & Pick<Rule, 'id'>): Rule {
+    return {
+      order: 0,
+      operator: 'contains',
+      patterns: ['WILDCRAFT'],
+      category: shopping,
+      origin: 'user',
+      ...over,
+    };
+  }
+
+  it('stores and clears a category override', async () => {
+    const store = createMemoryStore();
+    await store.putOverride('t1', shopping);
+    expect(await store.listOverrides()).toEqual(new Map([['t1', shopping]]));
+
+    // Clearing is distinct from labelling it `unclassified`: it hands the row
+    // back to the rules rather than asserting there is no good label.
+    await store.putOverride('t1', null);
+    expect((await store.listOverrides()).size).toBe(0);
+  });
+
+  it('returns a copy, so a caller cannot mutate the store through it', async () => {
+    const store = createMemoryStore();
+    await store.putOverride('t1', shopping);
+
+    (await store.listOverrides() as Map<string, typeof shopping>).delete('t1');
+    expect((await store.listOverrides()).size).toBe(1);
+  });
+
+  it('replaces a rule by id rather than accumulating duplicates', async () => {
+    const store = createMemoryStore();
+    await store.putRule(rule({ id: 'r1' }));
+    await store.putRule(rule({ id: 'r1', patterns: ['DECATHLON'] }));
+
+    const rules = await store.listRules();
+    expect(rules).toHaveLength(1);
+    expect(rules[0]?.patterns).toEqual(['DECATHLON']);
+  });
+
+  it('lists rules in the order they will actually fire', async () => {
+    const store = createMemoryStore();
+    await store.putRule(rule({ id: 'b', order: 5 }));
+    await store.putRule(rule({ id: 'a', order: 1 }));
+    await store.putRule(rule({ id: 'c', order: 5 }));
+
+    // By order, then by id — the same total order the matcher uses.
+    expect((await store.listRules()).map((r) => r.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('deletes a rule', async () => {
+    const store = createMemoryStore();
+    await store.putRule(rule({ id: 'r1' }));
+    await store.deleteRule('r1');
+    expect(await store.listRules()).toHaveLength(0);
+  });
+
+  it('leaves overrides and rules untouched when a statement is imported', async () => {
+    // The guarantee the two-record-class split exists for: re-importing a
+    // statement must never cost the user a manual edit.
+    const store = createMemoryStore();
+    await store.putOverride('t1', shopping);
+    await store.putRule(rule({ id: 'r1' }));
+
+    await store.putStatement(
+      statement({ account: axis, transactions: [row('2025-08-02', 100, 900)] }),
+      meta(),
+    );
+    // And again, as a duplicate.
+    await store.putStatement(
+      statement({ account: axis, transactions: [row('2025-08-02', 100, 900)] }),
+      meta(),
+    );
+
+    expect(await store.listOverrides()).toEqual(new Map([['t1', shopping]]));
+    expect(await store.listRules()).toHaveLength(1);
+  });
+
+  it('clears both classes of record', async () => {
+    const store = createMemoryStore();
+    await store.putOverride('t1', shopping);
+    await store.putRule(rule({ id: 'r1' }));
+    await store.clear();
+
+    expect((await store.listOverrides()).size).toBe(0);
+    expect(await store.listRules()).toHaveLength(0);
   });
 });
