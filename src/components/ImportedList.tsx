@@ -2,6 +2,7 @@ import type { Account } from '../model/canonical.ts';
 import type { ImportRecord } from '../storage/store.ts';
 import { formatPaise } from '../model/money.ts';
 import { formatIsoDate } from '../model/date.ts';
+import { formatAccountLabel } from '../model/accountDisplay.ts';
 
 /**
  * Everything imported this session, newest first.
@@ -65,7 +66,9 @@ export function ImportedList({
                 <tr key={record.statementId}>
                   <td className="narration">{record.fileName}</td>
                   <td className="nowrap">
-                    {account ? `${account.institution} ${account.identifierMasked}` : record.accountId}
+                    {account
+                      ? formatAccountLabel(account.institution, account.identifierMasked)
+                      : record.accountId}
                   </td>
                   <td className="nowrap">
                     {formatIsoDate(record.periodStart)} – {formatIsoDate(record.periodEnd)}

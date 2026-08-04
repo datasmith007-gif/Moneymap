@@ -1,7 +1,10 @@
-import type { Transaction } from '../model/canonical.ts';
+import { useState } from 'react';
+import type { CategoryId } from '../enrichment/taxonomy.ts';
 import type { MonthFlow } from '../engine/aggregate.ts';
+import type { TransactionRegisterRow } from '../engine/transactions.ts';
 import { formatPaise } from '../model/money.ts';
 import { formatIsoDate, formatMonth, type MonthKey } from '../model/date.ts';
+import { TransactionCategoryControl } from './TransactionCategoryControl.tsx';
 
 /**
  * The transactions behind one month's bar.
@@ -17,21 +20,40 @@ import { formatIsoDate, formatMonth, type MonthKey } from '../model/date.ts';
 export function MonthTransactions({
   month,
   flow,
-  transactions,
+  rows,
+  onCategorize,
   onClose,
 }: {
   readonly month: MonthKey;
   readonly flow: MonthFlow | undefined;
-  readonly transactions: readonly Transaction[];
+  readonly rows: readonly TransactionRegisterRow[];
+  readonly onCategorize: (transactionId: string, category: CategoryId | null) => Promise<void>;
   readonly onClose: () => void;
 }) {
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   let inflow = 0;
   let outflow = 0;
-  for (const txn of transactions) {
+  let countedRows = 0;
+  for (const { transaction: txn, classification } of rows) {
+    if (classification.isInternalTransfer) continue;
     if (txn.type === 'credit') inflow += txn.amount;
     else outflow += txn.amount;
+    countedRows++;
   }
   const matches = flow !== undefined && flow.inflow === inflow && flow.outflow === outflow;
+
+  async function save(transactionId: string, category: CategoryId | null) {
+    setSavingId(transactionId);
+    setError(null);
+    try {
+      await onCategorize(transactionId, category);
+    } catch {
+      setError('The category could not be saved. Try again.');
+    } finally {
+      setSavingId(null);
+    }
+  }
 
   return (
     <section className="panel">
@@ -42,15 +64,18 @@ export function MonthTransactions({
         </button>
       </header>
 
-      {transactions.length === 0 ? (
+      {rows.length === 0 ? (
         <p>No transactions in this month.</p>
       ) : (
         <>
           <p className={`verdict-sub ${matches ? 'status-good' : 'status-critical'}`}>
-            <span aria-hidden="true">{matches ? '✓' : '!'}</span> these {transactions.length} rows
-            sum to {formatPaise(inflow)} in and {formatPaise(outflow)} out
-            {matches ? ' — exactly the chart above' : " — which does NOT match the chart above"}
+            <span aria-hidden="true">{matches ? '✓' : '!'}</span> {countedRows} non-transfer row
+            {countedRows === 1 ? '' : 's'} sum to {formatPaise(inflow)} in and{' '}
+            {formatPaise(outflow)} out
+            {matches ? ' — exactly the chart above' : ' — which does NOT match the chart above'}
           </p>
+
+          {error !== null && <p className="caveat caveat-warning">{error}</p>}
 
           <div className="table-scroll">
             <table className="txns">
@@ -60,20 +85,28 @@ export function MonthTransactions({
                   <th>Narration</th>
                   <th className="num">Debit</th>
                   <th className="num">Credit</th>
+                  <th>Category</th>
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((txn) => (
-                  <tr key={txn.id}>
-                    <td className="nowrap">{formatIsoDate(txn.date)}</td>
-                    <td className="narration" title={txn.description}>
-                      {txn.description}
+                {rows.map((row) => (
+                  <tr key={row.transaction.id}>
+                    <td className="nowrap">{formatIsoDate(row.transaction.date)}</td>
+                    <td className="narration" title={row.transaction.description}>
+                      {row.transaction.description}
                     </td>
                     <td className="num">
-                      {txn.type === 'debit' ? formatPaise(txn.amount) : ''}
+                      {row.transaction.type === 'debit' ? formatPaise(row.transaction.amount) : ''}
                     </td>
                     <td className="num">
-                      {txn.type === 'credit' ? formatPaise(txn.amount) : ''}
+                      {row.transaction.type === 'credit' ? formatPaise(row.transaction.amount) : ''}
+                    </td>
+                    <td>
+                      <TransactionCategoryControl
+                        row={row}
+                        disabled={savingId === row.transaction.id}
+                        onChange={(category) => save(row.transaction.id, category)}
+                      />
                     </td>
                   </tr>
                 ))}

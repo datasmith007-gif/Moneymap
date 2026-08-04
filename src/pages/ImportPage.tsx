@@ -22,7 +22,15 @@ import type { SessionStore } from '../hooks/useSessionStore.ts';
  * Below all of it sits everything imported this session, which survives a reset
  * so that starting another import never looks like losing the last one.
  */
-export function ImportPage({ session }: { readonly session: SessionStore }) {
+export function ImportPage({
+  session,
+  canOpenDashboard,
+  onOpenDashboard,
+}: {
+  readonly session: SessionStore;
+  readonly canOpenDashboard: boolean;
+  readonly onOpenDashboard: () => void;
+}) {
   const queue = useStatementQueue(session);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -41,6 +49,24 @@ export function ImportPage({ session }: { readonly session: SessionStore }) {
 
   return (
     <>
+      <header className="import-intro">
+        <div>
+          <p className="eyebrow">Private, on-device statement analysis</p>
+          <h2>Bring your financial picture into focus.</h2>
+          <p>
+            Import one or more statements, review what was read, then continue to your dashboard.
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={!canOpenDashboard}
+          title={canOpenDashboard ? undefined : 'Import a statement first'}
+          onClick={onOpenDashboard}
+        >
+          To dashboard
+        </button>
+      </header>
+
       {queue.items.length > 0 && (
         <div className="page-actions">
           <button

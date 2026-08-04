@@ -1,4 +1,5 @@
 import type { Account, Paise, Transaction } from '../model/canonical.ts';
+import { formatAccountLabel } from '../model/accountDisplay.ts';
 import type { ImportRecord, Store } from '../storage/store.ts';
 import { classifyById, EMPTY_CONTEXT, type ClassifyContext } from '../enrichment/classify.ts';
 import { categoryLabel, type CategoryId } from '../enrichment/taxonomy.ts';
@@ -138,7 +139,7 @@ export interface CategoryTotal {
 }
 
 /**
- * How much of the range's spend actually carries a label.
+ * How much of the range is classified, by work remaining and by spend value.
  *
  * Published because it is the honest denominator for every category figure: a
  * breakdown covering 60% of spend says something very different from one
@@ -146,12 +147,15 @@ export interface CategoryTotal {
  * this.
  */
 export interface ClassificationCoverage {
+  /** Counts cover every transaction in the selected window, including credits. */
   readonly classifiedCount: number;
   readonly unclassifiedCount: number;
   /** Spend that fell into `unclassified` — the figure the breakdown omits. */
   readonly unclassifiedSpend: Paise;
-  /** Share of spend that is labelled, 0..1. */
-  readonly rate: number;
+  /** Share of spending transactions that are labelled, 0..1. */
+  readonly countRate: number;
+  /** Share of the spend amount that is labelled, 0..1. */
+  readonly amountRate: number;
 }
 
 export interface Caveat {
@@ -456,7 +460,9 @@ function computeFlows(
       if (days > 0) anyCovered = true;
       if (days < expected) {
         allComplete = false;
-        if (days === 0) missingAccounts.push(`${account.institution} ${account.identifierMasked}`);
+        if (days === 0) {
+          missingAccounts.push(formatAccountLabel(account.institution, account.identifierMasked));
+        }
       }
     }
 
@@ -604,15 +610,22 @@ function computeCoverage(
   labels: ReadonlyMap<string, Classification>,
   months: readonly MonthKey[],
 ): ClassificationCoverage {
-  const rows = spendRows(transactions, labels, months);
+  const monthSet = new Set(months);
+  const rows = transactions
+    .filter((txn) => monthSet.has(monthOf(txn.date)))
+    .map((txn) => ({ txn, label: labels.get(txn.id) }));
+  const spendingRows = spendRows(transactions, labels, months);
   let unclassifiedCount = 0;
   let unclassifiedSpend = 0;
   let totalSpend = 0;
 
-  for (const { txn, label } of rows) {
+  for (const { label } of rows) {
+    if (label === undefined || label.category === 'unclassified') unclassifiedCount++;
+  }
+
+  for (const { txn, label } of spendingRows) {
     totalSpend += txn.amount;
     if (label === undefined || label.category === 'unclassified') {
-      unclassifiedCount++;
       unclassifiedSpend += txn.amount;
     }
   }
@@ -621,7 +634,8 @@ function computeCoverage(
     classifiedCount: rows.length - unclassifiedCount,
     unclassifiedCount,
     unclassifiedSpend,
-    rate: totalSpend === 0 ? 1 : (totalSpend - unclassifiedSpend) / totalSpend,
+    countRate: rows.length === 0 ? 1 : (rows.length - unclassifiedCount) / rows.length,
+    amountRate: totalSpend === 0 ? 1 : (totalSpend - unclassifiedSpend) / totalSpend,
   };
 }
 
@@ -664,11 +678,11 @@ function buildCaveats(
   // A tenth of spend unlabelled is the point where the breakdown stops being a
   // fair picture of where money went. Below that the gap is worth showing in the
   // coverage figure but not worth a warning.
-  if (coverage.unclassifiedCount > 0 && coverage.rate < 0.9) {
-    const percent = Math.round((1 - coverage.rate) * 100);
+  if (coverage.unclassifiedCount > 0 && coverage.amountRate < 0.9) {
+    const percent = Math.round((1 - coverage.amountRate) * 100);
     caveats.push({
       id: 'unclassified_spend',
-      text: `${percent}% of spend (${coverage.unclassifiedCount} transaction${coverage.unclassifiedCount === 1 ? '' : 's'}) has no category yet, so the breakdown below does not account for all of it. Totals and net position are unaffected.`,
+      text: `${percent}% of spend has no category yet, and ${coverage.unclassifiedCount} transaction${coverage.unclassifiedCount === 1 ? '' : 's'} in this window need a category overall. The breakdown below does not account for the uncategorized spend; totals and net position are unaffected.`,
       severity: 'note',
       affects: ['spend'],
     });

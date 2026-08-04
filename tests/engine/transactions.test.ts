@@ -99,6 +99,29 @@ describe('transaction register — filtering and enrichment', () => {
     ).toEqual(['unknown']);
   });
 
+  it('filters transaction direction after classification', () => {
+    const rows = [
+      row('debit', {
+        date: '2025-08-01',
+        type: 'debit',
+        amount: 1,
+        description: 'OWN ACCOUNT',
+      }),
+      row('credit', {
+        date: '2025-08-02',
+        type: 'credit',
+        amount: 2,
+        description: 'OWN ACCOUNT',
+      }),
+    ];
+
+    expect(
+      buildTransactionRegister(input(rows), { category: 'self_transfer', type: 'debit' }).rows.map(
+        (item) => item.transaction.id,
+      ),
+    ).toEqual(['debit']);
+  });
+
   it('classifies the complete input before applying an account filter', () => {
     const debit = row('out', {
       date: '2025-08-10',

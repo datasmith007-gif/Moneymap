@@ -1,13 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { SessionStore } from '../hooks/useSessionStore.ts';
-import { useDashboard, useMonthTransactions } from '../hooks/useDashboard.ts';
+import { useAccountCoverage, useDashboard, useTransactionRows } from '../hooks/useDashboard.ts';
 import type { WindowSize } from '../engine/aggregate.ts';
 import { NetPositionPanel } from '../components/NetPositionPanel.tsx';
 import { AveragesPanel } from '../components/AveragesPanel.tsx';
 import { MoneyFlowChart } from '../components/MoneyFlowChart.tsx';
 import { SavingsTrendChart } from '../components/SavingsTrendChart.tsx';
 import { MonthTransactions } from '../components/MonthTransactions.tsx';
-import { formatMonth, type MonthKey } from '../model/date.ts';
+import { CategoryBreakdownPanel } from '../components/CategoryBreakdownPanel.tsx';
+import { AccountCoveragePanel } from '../components/AccountCoveragePanel.tsx';
+import { CategorizationReviewPanel } from '../components/CategorizationReviewPanel.tsx';
+import { RuleManagerPanel } from '../components/RuleManagerPanel.tsx';
+import type { CategoryId } from '../enrichment/taxonomy.ts';
+import { formatMonth, monthBounds, type MonthKey } from '../model/date.ts';
 
 const WINDOWS: readonly WindowSize[] = [3, 6, 12, 'all'];
 
@@ -19,9 +24,41 @@ const WINDOWS: readonly WindowSize[] = [3, 6, 12, 'all'];
 export function DashboardPage({ session }: { readonly session: SessionStore }) {
   const [window, setWindow] = useState<WindowSize>(6);
   const [selectedMonth, setSelectedMonth] = useState<MonthKey | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryId | null>(null);
 
   const dashboard = useDashboard(session.store, session.revision, window);
-  const transactions = useMonthTransactions(session.store, session.revision, selectedMonth);
+  const accountCoverage = useAccountCoverage(session.store, session.revision);
+  const selectedMonthBounds = selectedMonth === null ? null : monthBounds(selectedMonth);
+  const monthRows = useTransactionRows(
+    session.store,
+    session.revision,
+    selectedMonthBounds === null
+      ? null
+      : { from: selectedMonthBounds.start, to: selectedMonthBounds.end },
+  );
+  const unclassified = useTransactionRows(session.store, session.revision, {
+    category: 'unclassified',
+  });
+  const rangeStart =
+    dashboard?.kind === 'ready' ? monthBounds(dashboard.range.from).start : undefined;
+  const rangeEnd = dashboard?.kind === 'ready' ? monthBounds(dashboard.range.to).end : undefined;
+  const categoryRows = useTransactionRows(
+    session.store,
+    session.revision,
+    selectedCategory === null || rangeStart === undefined || rangeEnd === undefined
+      ? null
+      : { category: selectedCategory, type: 'debit', from: rangeStart, to: rangeEnd },
+  );
+
+  useEffect(() => {
+    if (
+      dashboard?.kind === 'ready' &&
+      selectedCategory !== null &&
+      !dashboard.spendByCategory.some((category) => category.category === selectedCategory)
+    ) {
+      setSelectedCategory(null);
+    }
+  }, [dashboard, selectedCategory]);
 
   if (dashboard === null) return <p className="empty">Loading…</p>;
 
@@ -48,10 +85,8 @@ export function DashboardPage({ session }: { readonly session: SessionStore }) {
           screen explaining why. The anchor is printed for the same reason.
         */}
         <span className="muted">
-          {window === 'all'
-            ? `All ${dashboard.flows.length} months`
-            : `${window} months`}{' '}
-          to {formatMonth(dashboard.anchorMonth)}
+          {window === 'all' ? `All ${dashboard.flows.length} months` : `${window} months`} to{' '}
+          {formatMonth(dashboard.anchorMonth)}
         </span>
         <div className="segmented" role="group" aria-label="Time window">
           {WINDOWS.map((size) => (
@@ -77,7 +112,29 @@ export function DashboardPage({ session }: { readonly session: SessionStore }) {
       )}
 
       <NetPositionPanel position={dashboard.netPosition} />
-      <AveragesPanel averages={dashboard.averages} caveats={dashboard.caveats} />
+      {accountCoverage !== null && <AccountCoveragePanel accounts={accountCoverage} />}
+      <AveragesPanel
+        averages={dashboard.averages}
+        caveats={dashboard.caveats}
+        savingsRate={dashboard.savingsRate}
+      />
+      <RuleManagerPanel
+        store={session.store}
+        revision={session.revision}
+        onAdd={session.addRule}
+        onDelete={session.deleteRule}
+      />
+      <CategorizationReviewPanel rows={unclassified} onCategorize={session.categorize} />
+      <CategoryBreakdownPanel
+        categories={dashboard.spendByCategory}
+        coverage={dashboard.coverage}
+        selectedCategory={selectedCategory}
+        rows={categoryRows}
+        onSelectCategory={(category) =>
+          setSelectedCategory(category === selectedCategory ? null : category)
+        }
+        onCategorize={session.categorize}
+      />
       <MoneyFlowChart
         flows={dashboard.flows}
         selectedMonth={selectedMonth}
@@ -88,7 +145,8 @@ export function DashboardPage({ session }: { readonly session: SessionStore }) {
         <MonthTransactions
           month={selectedMonth}
           flow={dashboard.flows.find((flow) => flow.month === selectedMonth)}
-          transactions={transactions}
+          rows={monthRows ?? []}
+          onCategorize={session.categorize}
           onClose={() => setSelectedMonth(null)}
         />
       )}

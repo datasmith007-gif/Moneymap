@@ -1,6 +1,7 @@
 import type { NetPosition } from '../engine/aggregate.ts';
 import { formatPaise } from '../model/money.ts';
 import { formatIsoDate } from '../model/date.ts';
+import { formatAccountLabel } from '../model/accountDisplay.ts';
 
 /**
  * Total across accounts, and the per-account balances behind it.
@@ -41,24 +42,28 @@ export function NetPositionPanel({ position }: { readonly position: NetPosition 
             {position.accounts.map((account) => (
               <tr key={account.accountId}>
                 <td className="nowrap">
-                  {account.institution} <span className="muted">{account.identifierMasked}</span>
+                  {formatAccountLabel(account.institution, account.identifierMasked)}
                 </td>
                 <td className="num">{formatPaise(account.balance)}</td>
                 <td className="nowrap">{formatIsoDate(account.asOf)}</td>
                 <td className="nowrap">
-                  {account.staleForWindow ? (
-                    <span className="status status-critical">
-                      <span aria-hidden="true">!</span> outside the window
-                    </span>
-                  ) : account.hasFlaggedStatements ? (
-                    <span className="status status-critical">
-                      <span aria-hidden="true">!</span> flagged on import
-                    </span>
-                  ) : (
-                    <span className="status status-good">
-                      <span aria-hidden="true">✓</span> current
-                    </span>
-                  )}
+                  <span className="status-list">
+                    {account.monthsBehind === 0 ? (
+                      <span className="status status-good">
+                        <span aria-hidden="true">✓</span> current
+                      </span>
+                    ) : (
+                      <span className={`status ${account.staleForWindow ? 'status-critical' : ''}`}>
+                        <span aria-hidden="true">{account.staleForWindow ? '!' : 'i'}</span>{' '}
+                        {account.monthsBehind} month{account.monthsBehind === 1 ? '' : 's'} behind
+                      </span>
+                    )}
+                    {account.hasFlaggedStatements && (
+                      <span className="status status-critical">
+                        <span aria-hidden="true">!</span> flagged on import
+                      </span>
+                    )}
+                  </span>
                 </td>
               </tr>
             ))}
