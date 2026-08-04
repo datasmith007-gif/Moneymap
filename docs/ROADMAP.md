@@ -39,8 +39,8 @@ It also shows five banks (HDFC, ICICI, SBI, Axis, Kotak). We parse two.
 | `src/enrichment/` | `classify()` over rules → merchant knowledge → transfer pairing; confidence bands; rule dry-run; per-import stats                                                                  |
 | `src/storage/`    | `Store` interface + in-memory adapter, holding two record classes — derived-from-source and user-authored                                                                          |
 | `src/engine/`     | Dashboard aggregation, review queue, enriched transaction query + deterministic CSV export, and per-account coverage gaps                                                          |
-| UI                | Import (batch queue) and Dashboard. Deliberately not developed further until the design lands.                                                                                     |
-| Tests             | **283 passing, 2 skipped.** The 2 are integration tests gated on real private PDFs and never run in CI.                                                                            |
+| UI                | Import-first shell and Dashboard; explicit light/dark mode, blurred dashboard entry backdrop, exact tables/KPIs, categorization review, manual choices, and session rule authoring |
+| Tests             | **307 passing, 2 skipped.** The 2 are integration tests gated on real private PDFs and never run in CI.                                                                            |
 
 ### Shipped, in order
 
@@ -48,6 +48,9 @@ It also shows five banks (HDFC, ICICI, SBI, Axis, Kotak). We parse two.
 2. **Batch statement import** — many files per drop, sequential writes, parked passwords, bulk include.
 3. **Classification completion** — review queue, rule dry-run preview, confidence bands, per-import stats.
 4. **Transactions and accounts foundation** — enriched free-text/category query with deterministic paging, audit-friendly CSV export, and exact per-account statement gaps.
+5. **Aggregation visibility** — exposed category shares, classification coverage, savings rate, variation, account lag/gaps, and monthly net inside the existing Dashboard. Exact tables and KPIs reuse the provisional UI without introducing another screen or visual system before the final design lands.
+6. **Interactive categorization** — exposed classification source on enriched transaction rows, added a collapsible and paged frequency-first label queue with occurrence/total ordering, inline repeated-label transaction drill-downs, exact-row fallback, and bulk or individual manual choices, preview-before-save personal rules, honest count/amount coverage, and single-open category transaction drill-downs. All writes are serialized, retroactive, and session-scoped; every dashboard figure refreshes after a change.
+7. **Import-first application shell** — replaced tab navigation with an explicit Import → Dashboard handoff and a small Dashboard → Import action, kept the live dashboard inert behind the import surface, and added a local-only light/dark preference. View changes never clear imported or user-authored session data.
 
 ---
 
@@ -68,6 +71,9 @@ These are not preferences. Designing against them will produce something that do
 
 - **Classification lives _beside_ the canonical record, never inside it.** `Transaction` has no category field. A rule edit re-runs the classifier over unchanged rows, so nothing stored is ever rewritten, there is no migration, and a manual edit cannot be lost to a re-import.
 - **Rules are always retroactive.** Because classification is derived on every read rather than stored per row, "apply to future entries only" cannot exist without giving every rule an effective-from date. The trade is a **preview** instead of a toggle. A user override always outranks a rule, so a backfill can never overwrite a decision someone actually made.
+- **Category menus share one grouped taxonomy renderer.** Transaction review and rule authoring use the same Income, Essentials, Lifestyle, Money movement, and Other grouping, while each caller controls which categories are valid for its context.
+- **Uncategorized label counts use the complete enriched result, not a register page.** Labels are punctuation-insensitive and split by debit/credit direction before frequency sorting, so a bulk choice cannot cross category applicability boundaries or report a partial count as complete.
+- **Account display is bank plus the final four digits everywhere.** The canonical record retains its full masked identifier for identity and audit behavior, while one display formatter prevents mask length or `X` characters from leaking into user-facing account labels.
 - **The store holds two record classes.** Derived-from-source (accounts, transactions, imports) and user-authored (overrides, rules). An import has no code path that can reach the second — that is how "overrides survive a re-import" stays cheap.
 - **Writes are not concurrency-safe and callers must serialise.** Overlapping writes race on "is this row already here?", making the new/duplicate split nondeterministic.
 - **Money is integer paise everywhere.** Rupees are a display-edge concern only.
@@ -97,7 +103,7 @@ The "one purchase was four times your usual shopping day" insight, plus the per-
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | **Budgets & Goals**                                             | Persistence. Budget limits, goal targets and progress are meaningless if they vanish on reload.   |
 | **Persistent rules and overrides**                              | Persistence. They work today, for the session only.                                               |
-| **Rule match counts** ("matched 142 times")                     | Persistence. Requires history the session does not have.                                          |
+| **Persistent lifetime rule match counts** ("matched 142 times") | Persistence. The session UI previews current-history reach, but cannot retain lifetime history.   |
 | **V2 storage adapter** (SQLite/WASM over OPFS)                  | Nothing — it is a choice not yet made. The `Store` seam is async-ready, so the swap is contained. |
 | **Custom user-defined labels**                                  | Persistence. A label that cannot outlive the session is not one anyone would invest in creating.  |
 | **Account behaviour analysis, investment habits, goal setting** | Persistence. Previously specced as features 4 and 5; product content is in the planning doc.      |
@@ -110,4 +116,4 @@ The "one purchase was four times your usual shopping day" insight, plus the per-
 - `CONFIDENCE_THRESHOLD` is currently unreachable — every confidence the classifier emits sits above it. Kept as the contract for a future strategy that scores lower; the confidence _bands_ carry the uncertainty in the meantime.
 - ICICI consolidated statements import the savings ledger only and flag the rest, so **every ICICI import lands as `needs_review`**.
 - No end-to-end tests. Playwright is named in the stack and is not installed.
-- Component coverage is thin — the batch import hook is tested; the pages and most components are not.
+- Component coverage is still partial — aggregation visibility, categorization controls/rules, and the batch import hook are tested; page-level interactions and most import components are not.

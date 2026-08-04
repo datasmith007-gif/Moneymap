@@ -1,4 +1,4 @@
-import type { Account, Paise, Transaction } from '../model/canonical.ts';
+import type { Account, Paise, Transaction, TransactionType } from '../model/canonical.ts';
 import { classifyById, EMPTY_CONTEXT, type ClassifyContext } from '../enrichment/classify.ts';
 import { normalise } from '../enrichment/narration.ts';
 import { categoryLabel, type CategoryId } from '../enrichment/taxonomy.ts';
@@ -8,6 +8,7 @@ import type { ImportRecord, Store } from '../storage/store.ts';
 /** Filters shared by the on-screen register and its export. */
 export interface TransactionFilter {
   readonly accountId?: string;
+  readonly type?: TransactionType;
   /** Inclusive ISO-date bounds. */
   readonly from?: string;
   readonly to?: string;
@@ -86,6 +87,19 @@ export async function loadTransactionRegister(
 ): Promise<TransactionRegisterPage> {
   const { input, context } = await loadUniverse(store);
   return buildTransactionRegister(input, query, context);
+}
+
+/**
+ * Read every enriched row matching a filter, without paging.
+ * Drill-downs use this instead of repeatedly walking register pages, so category
+ * and transfer semantics remain identical across every transaction surface.
+ */
+export async function loadTransactionRows(
+  store: Store,
+  filter: TransactionFilter = {},
+): Promise<readonly TransactionRegisterRow[]> {
+  const { input, context } = await loadUniverse(store);
+  return matchingRows(input, filter, context);
 }
 
 const CSV_HEADERS = [
@@ -172,6 +186,7 @@ function matchingRows(
     }
 
     if (filter.accountId !== undefined && transaction.accountId !== filter.accountId) continue;
+    if (filter.type !== undefined && transaction.type !== filter.type) continue;
     if (filter.from !== undefined && transaction.date < filter.from) continue;
     if (filter.to !== undefined && transaction.date > filter.to) continue;
     if (filter.category !== undefined && classification.category !== filter.category) continue;

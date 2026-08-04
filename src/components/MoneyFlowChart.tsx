@@ -10,7 +10,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { MonthFlow } from '../engine/aggregate.ts';
-import { formatPaise, formatPaiseCompact } from '../model/money.ts';
+import { formatPaise, formatPaiseCompact, formatSignedPaise } from '../model/money.ts';
 import { formatMonth, formatMonthShort, type MonthKey } from '../model/date.ts';
 
 /**
@@ -43,6 +43,7 @@ export function MoneyFlowChart({
     label: formatMonthShort(flow.month),
     inflow: flow.coverage === 'none' ? null : flow.inflow,
     outflow: flow.coverage === 'none' ? null : flow.outflow,
+    net: flow.net,
     coverage: flow.coverage,
     txnCount: flow.txnCount,
     missingAccounts: flow.missingAccounts,
@@ -95,7 +96,13 @@ export function MoneyFlowChart({
               iconSize={8}
               wrapperStyle={{ fontSize: 12, color: 'var(--ink-2)' }}
             />
-            <Bar dataKey="inflow" name="In" fill="var(--series-1)" maxBarSize={22} radius={[4, 4, 0, 0]}>
+            <Bar
+              dataKey="inflow"
+              name="In"
+              fill="var(--series-1)"
+              maxBarSize={22}
+              radius={[4, 4, 0, 0]}
+            >
               {data.map((row) => (
                 <Cell
                   key={row.month}
@@ -105,7 +112,13 @@ export function MoneyFlowChart({
                 />
               ))}
             </Bar>
-            <Bar dataKey="outflow" name="Out" fill="var(--series-2)" maxBarSize={22} radius={[4, 4, 0, 0]}>
+            <Bar
+              dataKey="outflow"
+              name="Out"
+              fill="var(--series-2)"
+              maxBarSize={22}
+              radius={[4, 4, 0, 0]}
+            >
               {data.map((row) => (
                 <Cell
                   key={row.month}
@@ -126,6 +139,7 @@ interface FlowRow {
   readonly month: MonthKey;
   readonly inflow: number | null;
   readonly outflow: number | null;
+  readonly net: number;
   readonly coverage: string;
   readonly txnCount: number;
   readonly missingAccounts: readonly string[];
@@ -159,6 +173,7 @@ function FlowTooltip({
             <span className="swatch swatch-2" aria-hidden="true" /> Out{' '}
             {formatPaise(row.outflow ?? 0)}
           </p>
+          <p>Net {formatSignedPaise(row.net)}</p>
           <p className="tooltip-note">
             {row.txnCount} transaction{row.txnCount === 1 ? '' : 's'}
             {row.coverage === 'partial' && ' · partly covered month'}

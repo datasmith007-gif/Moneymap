@@ -17,9 +17,11 @@ import { formatMonth } from '../model/date.ts';
 export function AveragesPanel({
   averages,
   caveats,
+  savingsRate,
 }: {
   readonly averages: Averages;
   readonly caveats: readonly Caveat[];
+  readonly savingsRate: number | null;
 }) {
   const months = averages.monthsCounted.length;
 
@@ -30,8 +32,8 @@ export function AveragesPanel({
           <h2>Monthly averages</h2>
         </header>
         <p>
-          No month in this window is fully covered by the statements you&rsquo;ve imported, so
-          there is nothing to average yet. Import a statement spanning a whole month.
+          No month in this window is fully covered by the statements you&rsquo;ve imported, so there
+          is nothing to average yet. Import a statement spanning a whole month.
         </p>
       </section>
     );
@@ -50,6 +52,15 @@ export function AveragesPanel({
         <Kpi label="Average income" stat={averages.income} />
         <Kpi label="Average spend" stat={averages.spend} />
         <Kpi label="Average savings" stat={averages.savings} />
+        <div className="kpi">
+          <span className="kpi-label">Savings rate</span>
+          <span className="kpi-value">
+            {savingsRate === null ? '—' : PERCENT.format(savingsRate)}
+          </span>
+          <span className="kpi-range">
+            {savingsRate === null ? 'No recorded income' : 'Savings as a share of income'}
+          </span>
+        </div>
       </div>
 
       {averages.monthsExcluded.length > 0 && (
@@ -78,13 +89,7 @@ export function AveragesPanel({
   );
 }
 
-function Kpi({
-  label,
-  stat,
-}: {
-  readonly label: string;
-  readonly stat: WindowStat;
-}) {
+function Kpi({ label, stat }: { readonly label: string; readonly stat: WindowStat }) {
   // No inflation marker any more: transfers between the user's own accounts are
   // detected and excluded before these figures are computed, so the "~" this
   // tile used to carry would now be claiming a distortion that isn't there.
@@ -93,12 +98,20 @@ function Kpi({
       <span className="kpi-label">{label}</span>
       <span className="kpi-value">{formatPaise(stat.mean)}</span>
       {stat.months > 1 ? (
-        <span className="kpi-range">
-          {formatPaise(stat.min)} – {formatPaise(stat.max)}
-        </span>
+        <>
+          <span className="kpi-range">
+            Range {formatPaise(stat.min)} – {formatPaise(stat.max)}
+          </span>
+          <span className="kpi-range">Standard deviation {formatPaise(stat.stdDev)}</span>
+        </>
       ) : (
         <span className="kpi-range muted">1 month — no variation yet</span>
       )}
     </div>
   );
 }
+
+const PERCENT = new Intl.NumberFormat('en-IN', {
+  style: 'percent',
+  maximumFractionDigits: 0,
+});

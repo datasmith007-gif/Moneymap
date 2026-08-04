@@ -1,5 +1,6 @@
 import type { ParsedStatement } from '../model/canonical.ts';
 import { formatPaise, formatSignedPaise } from '../model/money.ts';
+import { accountLastFour } from '../model/accountDisplay.ts';
 import { TransactionTable } from './TransactionTable.tsx';
 
 /**
@@ -50,9 +51,9 @@ export function StatementReport({ statement, issues, fileName }: StatementReport
             : `Balances are off by ${formatSignedPaise(drift)}`}
         </p>
         <p className="verdict-sub">
-          opening {formatPaise(statement.openingBalance)} + credits {formatPaise(credits)} −
-          debits {formatPaise(debits)} = {formatPaise(computedClosing)}, against a printed
-          closing balance of {formatPaise(statement.closingBalance)}
+          opening {formatPaise(statement.openingBalance)} + credits {formatPaise(credits)} − debits{' '}
+          {formatPaise(debits)} = {formatPaise(computedClosing)}, against a printed closing balance
+          of {formatPaise(statement.closingBalance)}
         </p>
       </section>
 
@@ -68,7 +69,7 @@ export function StatementReport({ statement, issues, fileName }: StatementReport
           </div>
           <div>
             <dt>Account</dt>
-            <dd>{account.identifierMasked}</dd>
+            <dd>{accountLastFour(account.identifierMasked)}</dd>
           </div>
           <div>
             <dt>Type</dt>

@@ -102,7 +102,7 @@ describe('parser → store → dashboard', () => {
     const allSpend = labelled + dashboard.coverage.unclassifiedSpend;
     expect(allSpend).toBe(dashboard.flows.reduce((sum, f) => sum + f.outflow, 0));
     expect(dashboard.spendByCategory.every((c) => c.category !== 'unclassified')).toBe(true);
-    expect(dashboard.coverage.rate).toBeCloseTo(allSpend === 0 ? 1 : labelled / allSpend, 10);
+    expect(dashboard.coverage.amountRate).toBeCloseTo(allSpend === 0 ? 1 : labelled / allSpend, 10);
   });
 
   it("applies the user's stored rules and overrides", async () => {

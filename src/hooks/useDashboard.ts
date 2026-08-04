@@ -1,18 +1,27 @@
 import { useEffect, useState } from 'react';
-import type { Transaction } from '../model/canonical.ts';
 import type { Store } from '../storage/store.ts';
 import { loadDashboard, type DashboardState, type WindowSize } from '../engine/aggregate.ts';
-import { monthBounds, type MonthKey } from '../model/date.ts';
+import { loadAccountCoverage, type AccountCoverage } from '../engine/coverage.ts';
+import {
+  loadTransactionRegister,
+  loadTransactionRows,
+  type TransactionRegisterPage,
+  type TransactionRegisterQuery,
+  type TransactionRegisterRow,
+  type TransactionFilter,
+} from '../engine/transactions.ts';
+import type { RulePreview } from '../enrichment/preview.ts';
+import type { Rule, RuleInput } from '../enrichment/types.ts';
+import { loadRulePreview } from '../engine/ruleWorkspace.ts';
 
 /**
- * Reading the store into React state. Two hooks, one job — the store is an
- * external mutable source, so both follow the same shape: re-read whenever
+ * Reading the store into React state. These hooks have one job — the store is an
+ * external mutable source, so all follow the same shape: re-read whenever
  * `revision` changes, and ignore a result that arrives after its inputs moved on.
  *
  * Neither hook computes anything. The dashboard's figures come from
- * `aggregate.ts` and the drill-down rows come from the store, because the test
- * runner only collects `.ts` and a number derived in a component could not be
- * tested.
+ * `aggregate.ts`, coverage comes from `coverage.ts`, and drill-down rows come
+ * from the store. Components only format and render those finished answers.
  */
 
 /** `null` while the first read is in flight. */
@@ -41,34 +50,157 @@ export function useDashboard(
   return state;
 }
 
-/**
- * The transactions behind one month's bar.
- *
- * Fetched from the store rather than sliced out of the aggregate, so the
- * drill-down list is literally the rows the figure was computed from — which is
- * what lets the panel re-sum them as a visible check rather than an assertion.
- */
-export function useMonthTransactions(
-  store: Store,
-  revision: number,
-  month: MonthKey | null,
-): readonly Transaction[] {
-  const [rows, setRows] = useState<readonly Transaction[]>([]);
+/** User-authored rules in their real evaluation order. */
+export function useRules(store: Store, revision: number): readonly Rule[] | null {
+  const [rules, setRules] = useState<readonly Rule[] | null>(null);
 
   useEffect(() => {
-    if (month === null) {
-      setRows([]);
-      return;
-    }
     let live = true;
-    const { start, end } = monthBounds(month);
-    void store.listTransactions({ from: start, to: end }).then((next) => {
-      if (live) setRows(next);
+    void store.listRules().then((next) => {
+      if (live) setRules(next);
     });
     return () => {
       live = false;
     };
-  }, [store, revision, month]);
+  }, [store, revision]);
 
-  return rows;
+  return rules;
+}
+
+/** Consequences of a draft rule, computed by the real classifier before save. */
+export function useRulePreview(
+  store: Store,
+  revision: number,
+  input: RuleInput | null,
+): RulePreview | null {
+  const [preview, setPreview] = useState<{
+    readonly key: string;
+    readonly value: RulePreview;
+  } | null>(null);
+  const operator = input?.operator;
+  const category = input?.category;
+  const patternsKey = input?.patterns.join('\u0000');
+  const previewKey =
+    operator === undefined || category === undefined || patternsKey === undefined
+      ? null
+      : `${operator}\u0001${category}\u0001${patternsKey}`;
+
+  useEffect(() => {
+    if (operator === undefined || category === undefined || patternsKey === undefined) {
+      setPreview(null);
+      return;
+    }
+    setPreview(null);
+    let live = true;
+    const patterns = patternsKey.split('\u0000');
+    void loadRulePreview(store, { operator, category, patterns }).then((next) => {
+      if (live)
+        setPreview({ key: `${operator}\u0001${category}\u0001${patternsKey}`, value: next });
+    });
+    return () => {
+      live = false;
+    };
+  }, [store, revision, operator, category, patternsKey]);
+
+  return preview !== null && preview.key === previewKey ? preview.value : null;
+}
+
+/** Every enriched row matching a filter, refreshed after rules or overrides change. */
+export function useTransactionRows(
+  store: Store,
+  revision: number,
+  filter: TransactionFilter | null,
+): readonly TransactionRegisterRow[] | null {
+  const [result, setResult] = useState<{
+    readonly key: string;
+    readonly rows: readonly TransactionRegisterRow[];
+  } | null>(null);
+  const accountId = filter?.accountId;
+  const type = filter?.type;
+  const from = filter?.from;
+  const to = filter?.to;
+  const search = filter?.search;
+  const category = filter?.category;
+  const key =
+    filter === null
+      ? null
+      : [accountId ?? '', type ?? '', from ?? '', to ?? '', search ?? '', category ?? ''].join(
+          '\u0000',
+        );
+
+  useEffect(() => {
+    if (key === null) {
+      setResult(null);
+      return;
+    }
+    let live = true;
+    const query: TransactionFilter = {
+      ...(accountId === undefined ? {} : { accountId }),
+      ...(type === undefined ? {} : { type }),
+      ...(from === undefined ? {} : { from }),
+      ...(to === undefined ? {} : { to }),
+      ...(search === undefined ? {} : { search }),
+      ...(category === undefined ? {} : { category }),
+    };
+    void loadTransactionRows(store, query).then((rows) => {
+      if (live) setResult({ key, rows });
+    });
+    return () => {
+      live = false;
+    };
+  }, [store, revision, key, accountId, type, from, to, search, category]);
+
+  return result?.key === key ? result.rows : null;
+}
+
+/** A paged enriched register, refreshed whenever rules or overrides change. */
+export function useTransactionRegister(
+  store: Store,
+  revision: number,
+  query: TransactionRegisterQuery,
+): TransactionRegisterPage | null {
+  const [page, setPage] = useState<TransactionRegisterPage | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void loadTransactionRegister(store, query).then((next) => {
+      if (live) setPage(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [
+    store,
+    revision,
+    query.accountId,
+    query.type,
+    query.from,
+    query.to,
+    query.search,
+    query.category,
+    query.page,
+    query.pageSize,
+  ]);
+
+  return page;
+}
+
+/** Account statement horizons and internal gaps, refreshed after every import. */
+export function useAccountCoverage(
+  store: Store,
+  revision: number,
+): readonly AccountCoverage[] | null {
+  const [coverage, setCoverage] = useState<readonly AccountCoverage[] | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void loadAccountCoverage(store).then((next) => {
+      if (live) setCoverage(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [store, revision]);
+
+  return coverage;
 }

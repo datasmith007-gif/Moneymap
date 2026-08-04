@@ -1,5 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Account, ParsedStatement } from '../model/canonical.ts';
+import type { CategoryId } from '../enrichment/taxonomy.ts';
+import { nextRuleOrder } from '../enrichment/preview.ts';
+import type { Rule, RuleInput } from '../enrichment/types.ts';
+import { buildUserRule } from '../enrichment/userRules.ts';
 import { createMemoryStore } from '../storage/memoryStore.ts';
 import type { ImportMeta, ImportRecord, ImportSummary, Store } from '../storage/store.ts';
 
@@ -27,6 +31,11 @@ export interface SessionStore {
    *  re-reading the store to turn an `accountId` into a bank and a mask. */
   readonly accounts: readonly Account[];
   readonly record: (statement: ParsedStatement, meta: ImportMeta) => Promise<ImportSummary>;
+  /** Set a manual category, or clear it to return the row to automatic classification. */
+  readonly categorize: (transactionId: string, category: CategoryId | null) => Promise<void>;
+  /** Add or remove retroactive classification rules for this session. */
+  readonly addRule: (input: RuleInput) => Promise<Rule>;
+  readonly deleteRule: (ruleId: string) => Promise<void>;
   readonly clear: () => Promise<void>;
 }
 
@@ -39,6 +48,7 @@ export function useSessionStore(): SessionStore {
   const [imports, setImports] = useState<readonly ImportRecord[]>([]);
   const [accounts, setAccounts] = useState<readonly Account[]>([]);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const ruleSequence = useRef(0);
 
   const record = useCallback(
     (statement: ParsedStatement, meta: ImportMeta): Promise<ImportSummary> => {
@@ -61,12 +71,71 @@ export function useSessionStore(): SessionStore {
     [store],
   );
 
-  const clear = useCallback(async () => {
-    await store.clear();
-    setImports([]);
-    setAccounts([]);
-    setRevision((n) => n + 1);
+  const clear = useCallback((): Promise<void> => {
+    const next = queue.current.then(async () => {
+      await store.clear();
+      setImports([]);
+      setAccounts([]);
+      setRevision((n) => n + 1);
+    });
+    queue.current = next.catch(() => undefined);
+    return next;
   }, [store]);
 
-  return { store, revision, imports, accounts, record, clear };
+  const categorize = useCallback(
+    (transactionId: string, category: CategoryId | null): Promise<void> => {
+      const next = queue.current.then(async () => {
+        await store.putOverride(transactionId, category);
+        setRevision((n) => n + 1);
+      });
+      queue.current = next.catch(() => undefined);
+      return next;
+    },
+    [store],
+  );
+
+  const addRule = useCallback(
+    (input: RuleInput): Promise<Rule> => {
+      const next = queue.current.then(async () => {
+        const rules = await store.listRules();
+        let id: string;
+        do {
+          ruleSequence.current++;
+          id = `user:${ruleSequence.current}`;
+        } while (rules.some((rule) => rule.id === id));
+
+        const rule = buildUserRule(input, id, nextRuleOrder(rules));
+        await store.putRule(rule);
+        setRevision((n) => n + 1);
+        return rule;
+      });
+      queue.current = next.catch(() => undefined);
+      return next;
+    },
+    [store],
+  );
+
+  const deleteRule = useCallback(
+    (ruleId: string): Promise<void> => {
+      const next = queue.current.then(async () => {
+        await store.deleteRule(ruleId);
+        setRevision((n) => n + 1);
+      });
+      queue.current = next.catch(() => undefined);
+      return next;
+    },
+    [store],
+  );
+
+  return {
+    store,
+    revision,
+    imports,
+    accounts,
+    record,
+    categorize,
+    addRule,
+    deleteRule,
+    clear,
+  };
 }

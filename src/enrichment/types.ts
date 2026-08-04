@@ -86,3 +86,10 @@ export interface Rule {
   readonly category: CategoryId;
   readonly origin: 'user' | 'shipped';
 }
+
+/** The editable portion of a user rule, before identity and ordering are assigned. */
+export interface RuleInput {
+  readonly operator: RuleOperator;
+  readonly patterns: readonly string[];
+  readonly category: CategoryId;
+}

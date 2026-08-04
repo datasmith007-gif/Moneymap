@@ -276,7 +276,7 @@ describe('monthly coverage', () => {
 
     const july = dashboard.flows.find((flow) => flow.month === '2025-07');
     expect(july?.coverage).toBe('partial');
-    expect(july?.missingAccounts).toEqual(['ICICI Bank XXXX3458']);
+    expect(july?.missingAccounts).toEqual(['ICICI Bank 3458']);
   });
 });
 
@@ -552,7 +552,8 @@ describe('spend by category', () => {
     // 6,000 of 10,000 total spend — the unclassified 2,000 stays in the
     // denominator, so a category cannot look bigger the less we understand.
     expect(dashboard.spendByCategory[0]?.share).toBeCloseTo(0.6, 10);
-    expect(dashboard.coverage.rate).toBeCloseTo(0.8, 10);
+    expect(dashboard.coverage.countRate).toBeCloseTo(2 / 3, 10);
+    expect(dashboard.coverage.amountRate).toBeCloseTo(0.8, 10);
     expect(dashboard.coverage.unclassifiedSpend).toBe(2_000_00);
     expect(dashboard.coverage.unclassifiedCount).toBe(1);
   });
@@ -560,7 +561,69 @@ describe('spend by category', () => {
   it('reports full coverage rather than dividing by zero when there is no spend', () => {
     const dashboard = ready({ accounts: [axis], imports: [record()], transactions: [] });
     expect(dashboard.spendByCategory).toEqual([]);
-    expect(dashboard.coverage.rate).toBe(1);
+    expect(dashboard.coverage.countRate).toBe(1);
+    expect(dashboard.coverage.amountRate).toBe(1);
+  });
+
+  it('keeps transaction coverage honest when a large labelled row dominates the amount', () => {
+    const dashboard = ready({
+      accounts: [axis],
+      imports: [record()],
+      transactions: [
+        txn({
+          id: 'large',
+          accountId: axis.id,
+          date: '2025-08-01',
+          type: 'debit',
+          amount: 1_00_000_00,
+          description: 'UPI SWIGGY',
+        }),
+        ...Array.from({ length: 9 }, (_, index) =>
+          txn({
+            id: `unknown-${index}`,
+            accountId: axis.id,
+            date: '2025-08-02',
+            type: 'debit',
+            amount: 1,
+            description: `REF ${index}`,
+          }),
+        ),
+      ],
+    });
+
+    expect(dashboard.coverage.countRate).toBe(0.1);
+    expect(dashboard.coverage.amountRate).toBeGreaterThan(0.999);
+    expect(dashboard.coverage.unclassifiedCount).toBe(9);
+  });
+
+  it('counts uncategorized credits even when every spending row is categorized', () => {
+    const dashboard = ready({
+      accounts: [axis],
+      imports: [record()],
+      transactions: [
+        txn({
+          id: 'food',
+          accountId: axis.id,
+          date: '2025-08-01',
+          type: 'debit',
+          amount: 500_00,
+          description: 'UPI SWIGGY',
+        }),
+        txn({
+          id: 'unknown-credit',
+          accountId: axis.id,
+          date: '2025-08-02',
+          type: 'credit',
+          amount: 100_00,
+          description: 'REF 12345',
+        }),
+      ],
+    });
+
+    expect(dashboard.coverage.countRate).toBe(0.5);
+    expect(dashboard.coverage.amountRate).toBe(1);
+    expect(dashboard.coverage.unclassifiedCount).toBe(1);
+    expect(dashboard.coverage.unclassifiedSpend).toBe(0);
   });
 });
 
