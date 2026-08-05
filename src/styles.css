@@ -764,21 +764,45 @@ button:disabled {
   flex: 0 0 auto;
 }
 
-.categorization-order {
-  display: grid;
-  gap: 3px;
-  color: var(--muted);
-  font-size: 11px;
+/* ── Sortable column headings ────────────────────────────────────────────── */
+
+.sort-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
 }
 
-.categorization-order select {
-  border: 1px solid var(--rule);
-  border-radius: 7px;
-  background: var(--plane);
+.num .sort-toggle {
+  /* Keeps the heading flush with the right-aligned figures beneath it. */
+  flex-direction: row-reverse;
+}
+
+.sort-toggle:hover .sort-arrow,
+.sort-toggle:focus-visible .sort-arrow {
+  color: var(--ink-2);
+}
+
+.sort-arrow {
+  color: var(--rule);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.sort-toggle-active {
   color: var(--ink);
-  font: inherit;
-  font-size: 13px;
-  padding: 6px 9px;
+}
+
+.sort-toggle-active .sort-arrow {
+  color: var(--ink);
 }
 
 .pagination {
@@ -817,10 +841,6 @@ button:disabled {
   }
 
   .categorization-controls .segmented,
-  .categorization-order select {
-    width: 100%;
-  }
-
   .categorization-controls .segment {
     flex: 1;
   }
@@ -879,6 +899,27 @@ button:disabled {
   font-size: 11px;
 }
 
+/* Mirrors the narration cell above: the claim in ink, its evidence beneath in
+   muted small type. The two lines are one statement, not two facts. */
+.anomaly-compare {
+  display: block;
+}
+
+.anomaly-multiple {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.anomaly-baseline {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 .rule-form {
   display: grid;
   grid-template-columns: minmax(260px, 2fr) minmax(140px, 1fr) minmax(170px, 1fr) auto;
@@ -895,6 +936,16 @@ button:disabled {
 
 .rule-form button {
   white-space: nowrap;
+}
+
+/* Spans the row so it cannot change any field's height, and therefore cannot
+   knock the controls out of alignment. Sits under the first column, which is
+   the field it is about. */
+.rule-hint {
+  grid-column: 1 / -1;
+  margin-top: -4px;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .rule-preview {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Store } from '../storage/store.ts';
 import { loadDashboard, type DashboardState, type WindowSize } from '../engine/aggregate.ts';
 import { loadAccountCoverage, type AccountCoverage } from '../engine/coverage.ts';
+import { loadAnomalies, type Anomaly } from '../engine/anomalies.ts';
 import {
   loadTransactionRegister,
   loadTransactionRows,
@@ -183,6 +184,37 @@ export function useTransactionRegister(
   ]);
 
   return page;
+}
+
+/**
+ * Spending far outside its category's usual, for the period being viewed.
+ *
+ * `from`/`to` bound which findings come back, never the baseline they are
+ * measured against — that distinction belongs to the engine and is documented
+ * there. Passing `null` bounds asks about everything imported.
+ */
+export function useAnomalies(
+  store: Store,
+  revision: number,
+  from: string | null,
+  to: string | null,
+): readonly Anomaly[] | null {
+  const [anomalies, setAnomalies] = useState<readonly Anomaly[] | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void loadAnomalies(store, {
+      ...(from === null ? {} : { from }),
+      ...(to === null ? {} : { to }),
+    }).then((next) => {
+      if (live) setAnomalies(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [store, revision, from, to]);
+
+  return anomalies;
 }
 
 /** Account statement horizons and internal gaps, refreshed after every import. */

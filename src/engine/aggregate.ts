@@ -547,7 +547,20 @@ function computeCumulative(flows: readonly MonthFlow[]): CumulativePoint[] {
 
 // ── Categories ──────────────────────────────────────────────────────────────
 
-/** Debits inside the range that count as spend — not transfers, not credits. */
+/**
+ * Whether one row counts as spend: a debit that is not a transfer between the
+ * user's own accounts.
+ *
+ * Exported because it is a *decision*, not a filter — and a second copy of it
+ * elsewhere in the engine is how the category breakdown and any other spend
+ * figure quietly start disagreeing about the same rupees. Callers that need a
+ * date bound apply their own; this answers only "is this spending?".
+ */
+export function isSpendRow(txn: Transaction, label: Classification | undefined): boolean {
+  return txn.type === 'debit' && label?.isInternalTransfer !== true;
+}
+
+/** Spend rows falling inside the given months. */
 function spendRows(
   transactions: readonly Transaction[],
   labels: ReadonlyMap<string, Classification>,
@@ -555,9 +568,9 @@ function spendRows(
 ): { readonly txn: Transaction; readonly label: Classification | undefined }[] {
   const inRange = new Set(months);
   return transactions
-    .filter((txn) => txn.type === 'debit' && inRange.has(monthOf(txn.date)))
+    .filter((txn) => inRange.has(monthOf(txn.date)))
     .map((txn) => ({ txn, label: labels.get(txn.id) }))
-    .filter(({ label }) => label?.isInternalTransfer !== true);
+    .filter(({ txn, label }) => isSpendRow(txn, label));
 }
 
 /**

@@ -112,13 +112,10 @@ describe('transaction category controls', () => {
     expect(bodyRows[0]?.textContent).toContain('LOCAL MART');
     expect(bodyRows[0]?.textContent).toContain('2');
 
-    fireEvent.change(screen.getByLabelText('Order labels by'), {
-      target: { value: 'total' },
-    });
+    // Ordering is in the column headings now: click Total to rank by value.
+    fireEvent.click(screen.getByRole('button', { name: /Total/ }));
     expect(screen.getAllByRole('row')[1]?.textContent).toContain('CORNER CAFE');
-    fireEvent.change(screen.getByLabelText('Order labels by'), {
-      target: { value: 'occurrences' },
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Occurrences/ }));
 
     fireEvent.change(screen.getByLabelText('Category for LOCAL MART debit'), {
       target: { value: 'groceries' },
@@ -131,6 +128,78 @@ describe('transaction category controls', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Transactions' }));
     expect(screen.getByRole('columnheader', { name: 'Date' })).toBeTruthy();
+  });
+
+  it('sorts from the column headings, showing direction and flipping on a second click', () => {
+    render(
+      <CategorizationReviewPanel
+        rows={[
+          unclassifiedRow('mart-a', 'LOCAL MART', '2025-08-12'),
+          unclassifiedRow('mart-b', 'Local-Mart', '2025-08-11'),
+          unclassifiedRow('cafe', 'CORNER CAFE', '2025-08-10', 10_000_00),
+        ]}
+        onCategorize={async () => undefined}
+      />,
+    );
+
+    // Default: most repeated first, and the heading says so.
+    const occurrences = () => screen.getByRole('columnheader', { name: /Occurrences/ });
+    expect(occurrences().getAttribute('aria-sort')).toBe('descending');
+    expect(screen.getAllByRole('row')[1]?.textContent).toContain('LOCAL MART');
+
+    // A second click on the active column reverses it.
+    fireEvent.click(screen.getByRole('button', { name: /Occurrences/ }));
+    expect(occurrences().getAttribute('aria-sort')).toBe('ascending');
+    expect(screen.getAllByRole('row')[1]?.textContent).toContain('CORNER CAFE');
+
+    // Moving to another column hands the sort over, and the old one goes quiet.
+    fireEvent.click(screen.getByRole('button', { name: /Label/ }));
+    expect(occurrences().getAttribute('aria-sort')).toBe('none');
+    expect(screen.getByRole('columnheader', { name: /Label/ }).getAttribute('aria-sort')).toBe(
+      'ascending',
+    );
+    expect(screen.getAllByRole('row')[1]?.textContent).toContain('CORNER CAFE');
+
+    // Category holds a control, not a value, so it is not a sort target.
+    expect(screen.getByRole('columnheader', { name: 'Category' }).hasAttribute('aria-sort')).toBe(
+      false,
+    );
+  });
+
+  it('sorts the exact-row view by its own columns', () => {
+    render(
+      <CategorizationReviewPanel
+        rows={[
+          unclassifiedRow('small', 'CORNER CAFE', '2025-08-10', 100_00),
+          unclassifiedRow('large', 'LOCAL MART', '2025-08-12', 90_000_00),
+        ]}
+        onCategorize={async () => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Transactions' }));
+    // Oldest first to begin with — the order the store already returns.
+    expect(screen.getAllByRole('row')[1]?.textContent).toContain('CORNER CAFE');
+
+    fireEvent.click(screen.getByRole('button', { name: /Amount/ }));
+    expect(screen.getAllByRole('row')[1]?.textContent).toContain('LOCAL MART');
+    expect(screen.getByRole('columnheader', { name: /Amount/ }).getAttribute('aria-sort')).toBe(
+      'descending',
+    );
+  });
+
+  it('returns to page one when the order changes', () => {
+    const rows = Array.from({ length: 12 }, (_, index) =>
+      unclassifiedRow(`txn-${index}`, `LABEL ${String(index).padStart(2, '0')}`, '2025-08-10'),
+    );
+    render(<CategorizationReviewPanel rows={rows} onCategorize={async () => undefined} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('Page 2 of 2')).toBeTruthy();
+
+    // Page 2 of the old order holds unrelated rows in the new one.
+    fireEvent.click(screen.getByRole('button', { name: /Total/ }));
+    expect(screen.getByText('Page 1 of 2')).toBeTruthy();
   });
 
   it('expands a repeated label inline and allows different categories per transaction', async () => {

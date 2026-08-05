@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { SessionStore } from '../hooks/useSessionStore.ts';
-import { useAccountCoverage, useDashboard, useTransactionRows } from '../hooks/useDashboard.ts';
+import {
+  useAccountCoverage,
+  useAnomalies,
+  useDashboard,
+  useTransactionRows,
+} from '../hooks/useDashboard.ts';
 import type { WindowSize } from '../engine/aggregate.ts';
 import { NetPositionPanel } from '../components/NetPositionPanel.tsx';
 import { AveragesPanel } from '../components/AveragesPanel.tsx';
@@ -10,6 +15,7 @@ import { MonthTransactions } from '../components/MonthTransactions.tsx';
 import { CategoryBreakdownPanel } from '../components/CategoryBreakdownPanel.tsx';
 import { AccountCoveragePanel } from '../components/AccountCoveragePanel.tsx';
 import { CategorizationReviewPanel } from '../components/CategorizationReviewPanel.tsx';
+import { AnomalyPanel } from '../components/AnomalyPanel.tsx';
 import { RuleManagerPanel } from '../components/RuleManagerPanel.tsx';
 import { DashboardNotices } from '../components/DashboardNotices.tsx';
 import { Modal } from '../components/Modal.tsx';
@@ -51,6 +57,14 @@ export function DashboardPage({ session }: { readonly session: SessionStore }) {
     selectedCategory === null || rangeStart === undefined || rangeEnd === undefined
       ? null
       : { category: selectedCategory, type: 'debit', from: rangeStart, to: rangeEnd },
+  );
+  // Bounded by the same range, so the findings shown belong to the period on
+  // screen. The baseline behind them is the whole history either way.
+  const anomalies = useAnomalies(
+    session.store,
+    session.revision,
+    rangeStart ?? null,
+    rangeEnd ?? null,
   );
 
   useEffect(() => {
@@ -143,6 +157,7 @@ export function DashboardPage({ session }: { readonly session: SessionStore }) {
         }
         onCategorize={session.categorize}
       />
+      <AnomalyPanel anomalies={anomalies} />
       <MoneyFlowChart
         flows={dashboard.flows}
         selectedMonth={selectedMonth}
