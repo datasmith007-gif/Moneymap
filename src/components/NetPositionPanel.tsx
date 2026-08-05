@@ -17,7 +17,7 @@ import { formatAccountLabel } from '../model/accountDisplay.ts';
  */
 export function NetPositionPanel({ position }: { readonly position: NetPosition }) {
   return (
-    <section className="panel">
+    <section className="summary-card net-position">
       <header className="panel-head">
         <h2>Net position</h2>
         {position.asOf !== position.newestAsOf && (

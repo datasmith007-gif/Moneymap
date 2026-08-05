@@ -56,7 +56,7 @@ export function MonthTransactions({
   }
 
   return (
-    <section className="panel">
+    <section className="work-panel month-transactions">
       <header className="panel-head">
         <h2>{formatMonth(month)}</h2>
         <button type="button" className="link" onClick={onClose}>

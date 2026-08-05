@@ -26,8 +26,8 @@ export function DashboardNotices({ dashboard }: { readonly dashboard: Dashboard 
   return (
     <InfoTip
       glyph="!"
+      text={`Data quality: ${notices.length} item${notices.length === 1 ? '' : 's'}`}
       tone={warnings > 0 ? 'warning' : 'note'}
-      badge={String(notices.length)}
       label={`${notices.length} thing${notices.length === 1 ? '' : 's'} to know about these figures`}
       align="end"
     >

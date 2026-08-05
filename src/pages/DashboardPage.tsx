@@ -14,9 +14,8 @@ import { SavingsTrendChart } from '../components/SavingsTrendChart.tsx';
 import { MonthTransactions } from '../components/MonthTransactions.tsx';
 import { CategoryBreakdownPanel } from '../components/CategoryBreakdownPanel.tsx';
 import { AccountCoveragePanel } from '../components/AccountCoveragePanel.tsx';
-import { CategorizationReviewPanel } from '../components/CategorizationReviewPanel.tsx';
 import { AnomalyPanel } from '../components/AnomalyPanel.tsx';
-import { RuleManagerPanel } from '../components/RuleManagerPanel.tsx';
+import { ReviewCenter } from '../components/ReviewCenter.tsx';
 import { DashboardNotices } from '../components/DashboardNotices.tsx';
 import { Modal } from '../components/Modal.tsx';
 import type { CategoryId } from '../enrichment/taxonomy.ts';
@@ -81,7 +80,7 @@ export function DashboardPage({ session }: { readonly session: SessionStore }) {
 
   if (dashboard.kind === 'empty') {
     return (
-      <section className="panel">
+      <section className="work-panel">
         <header className="panel-head">
           <h2>Nothing to show yet</h2>
         </header>
@@ -140,24 +139,6 @@ export function DashboardPage({ session }: { readonly session: SessionStore }) {
 
       <NetPositionPanel position={dashboard.netPosition} />
       <AveragesPanel averages={dashboard.averages} savingsRate={dashboard.savingsRate} />
-      <RuleManagerPanel
-        store={session.store}
-        revision={session.revision}
-        onAdd={session.addRule}
-        onDelete={session.deleteRule}
-      />
-      <CategorizationReviewPanel rows={unclassified} onCategorize={session.categorize} />
-      <CategoryBreakdownPanel
-        categories={dashboard.spendByCategory}
-        coverage={dashboard.coverage}
-        selectedCategory={selectedCategory}
-        rows={categoryRows}
-        onSelectCategory={(category) =>
-          setSelectedCategory(category === selectedCategory ? null : category)
-        }
-        onCategorize={session.categorize}
-      />
-      <AnomalyPanel anomalies={anomalies} />
       <MoneyFlowChart
         flows={dashboard.flows}
         selectedMonth={selectedMonth}
@@ -174,7 +155,26 @@ export function DashboardPage({ session }: { readonly session: SessionStore }) {
         />
       )}
 
+      <CategoryBreakdownPanel
+        categories={dashboard.spendByCategory}
+        coverage={dashboard.coverage}
+        selectedCategory={selectedCategory}
+        rows={categoryRows}
+        onSelectCategory={(category) =>
+          setSelectedCategory(category === selectedCategory ? null : category)
+        }
+        onCategorize={session.categorize}
+      />
       <SavingsTrendChart points={dashboard.cumulative} />
+      <AnomalyPanel anomalies={anomalies} />
+      <ReviewCenter
+        store={session.store}
+        revision={session.revision}
+        rows={unclassified}
+        onCategorize={session.categorize}
+        onAddRule={session.addRule}
+        onDeleteRule={session.deleteRule}
+      />
     </>
   );
 }

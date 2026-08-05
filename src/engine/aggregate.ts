@@ -2,7 +2,7 @@ import type { Account, Paise, Transaction } from '../model/canonical.ts';
 import { formatAccountLabel } from '../model/accountDisplay.ts';
 import type { ImportRecord, Store } from '../storage/store.ts';
 import { classifyById, EMPTY_CONTEXT, type ClassifyContext } from '../enrichment/classify.ts';
-import { categoryLabel, type CategoryId } from '../enrichment/taxonomy.ts';
+import { categoryLabel, isFlowNeutral, type CategoryId } from '../enrichment/taxonomy.ts';
 import type { Classification } from '../enrichment/types.ts';
 import { meanPaise } from '../model/money.ts';
 import { coveredDays } from './coverage.ts';
@@ -441,7 +441,8 @@ function computeFlows(
     // A transfer between the user's own accounts is the same rupee seen twice.
     // Counting it would add its amount to both income and spend — the very
     // distortion this engine used to carry a standing caveat about.
-    if (labels.get(txn.id)?.isInternalTransfer === true) continue;
+    const category = labels.get(txn.id)?.category;
+    if (category !== undefined && isFlowNeutral(category)) continue;
     if (txn.type === 'credit') bucket.inflow += txn.amount;
     else bucket.outflow += txn.amount;
     bucket.count++;
@@ -548,8 +549,8 @@ function computeCumulative(flows: readonly MonthFlow[]): CumulativePoint[] {
 // ── Categories ──────────────────────────────────────────────────────────────
 
 /**
- * Whether one row counts as spend: a debit that is not a transfer between the
- * user's own accounts.
+ * Whether one row counts as spend: a debit that is not a flow-neutral movement
+ * such as an internal transfer or loan principal.
  *
  * Exported because it is a *decision*, not a filter — and a second copy of it
  * elsewhere in the engine is how the category breakdown and any other spend
@@ -557,7 +558,7 @@ function computeCumulative(flows: readonly MonthFlow[]): CumulativePoint[] {
  * date bound apply their own; this answers only "is this spending?".
  */
 export function isSpendRow(txn: Transaction, label: Classification | undefined): boolean {
-  return txn.type === 'debit' && label?.isInternalTransfer !== true;
+  return txn.type === 'debit' && (label === undefined || !isFlowNeutral(label.category));
 }
 
 /** Spend rows falling inside the given months. */

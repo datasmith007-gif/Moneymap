@@ -180,20 +180,44 @@ function ReviewPanel({
 function StatusCell({ item }: { readonly item: QueueItem }) {
   switch (item.status) {
     case 'queued':
-      return <span className="muted">Waiting</span>;
+      return (
+        <span className="status status-note">
+          <span aria-hidden="true">…</span> Waiting
+        </span>
+      );
     case 'parsing':
-      return <span className="muted">Reading…</span>;
+      return (
+        <span className="status status-note">
+          <span aria-hidden="true">…</span> Reading…
+        </span>
+      );
     case 'locked':
-      return <span>Locked</span>;
+      return (
+        <span className="status status-note">
+          <span aria-hidden="true">●</span> Locked
+        </span>
+      );
     case 'review':
-      return <span>Needs review</span>;
+      return (
+        <span className="status status-critical">
+          <span aria-hidden="true">!</span> Needs review
+        </span>
+      );
     case 'rejected':
-      return <span title={item.message ?? undefined}>Not imported</span>;
+      return (
+        <span className="status status-critical" title={item.message ?? undefined}>
+          <span aria-hidden="true">!</span> Not imported
+        </span>
+      );
     case 'done':
       return item.summary?.kind === 'duplicate_statement' ? (
-        <span className="muted">Already imported</span>
+        <span className="status status-note">
+          <span aria-hidden="true">↺</span> Already imported
+        </span>
       ) : (
-        <span className="muted">Added</span>
+        <span className="status status-good">
+          <span aria-hidden="true">✓</span> Added
+        </span>
       );
   }
 }
@@ -205,7 +229,8 @@ function rowCount(item: QueueItem): string {
       ? `${transactionsImported} +${transactionsSkipped} dup`
       : String(transactionsImported);
   }
-  if (item.outcome?.kind === 'needs_review') return String(item.outcome.statement.transactions.length);
+  if (item.outcome?.kind === 'needs_review')
+    return String(item.outcome.statement.transactions.length);
   return '—';
 }
 

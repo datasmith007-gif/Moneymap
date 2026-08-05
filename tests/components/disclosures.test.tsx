@@ -77,6 +77,8 @@ describe('dashboard notices', () => {
     expect(screen.queryByText(/no variation to show/)).toBeNull();
 
     const trigger = screen.getByRole('button', { name: /2 things to know/ });
+    expect(trigger.textContent).toContain('Data quality');
+    expect(trigger.textContent).toContain('2');
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
 
     fireEvent.mouseEnter(trigger.parentElement as HTMLElement);

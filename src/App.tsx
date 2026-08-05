@@ -33,18 +33,22 @@ export default function App() {
   }, [theme]);
 
   return (
-    <main className="app">
-      <header className="app-head">
+    <main className={`app app-${view}`}>
+      <header className={`app-head app-head-${view}`}>
         <h1>MoneyMap</h1>
         <div className="app-actions">
           {view === 'dashboard' && (
-            <button type="button" className="header-action" onClick={() => setView('import')}>
+            <button
+              type="button"
+              className="header-action button-secondary"
+              onClick={() => setView('import')}
+            >
               Import files
             </button>
           )}
           <button
             type="button"
-            className="header-action theme-action"
+            className="header-action button-secondary theme-action"
             aria-pressed={theme === 'dark'}
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           >

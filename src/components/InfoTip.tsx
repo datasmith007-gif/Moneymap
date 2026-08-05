@@ -21,6 +21,7 @@ import { useId, useRef, useState, type ReactNode } from 'react';
 export function InfoTip({
   glyph,
   label,
+  text,
   badge,
   tone = 'note',
   align = 'start',
@@ -30,6 +31,8 @@ export function InfoTip({
   readonly glyph: string;
   /** The trigger's accessible name — it must say what is behind the tip. */
   readonly label: string;
+  /** Optional visible trigger label; use when the disclosure is page-level. */
+  readonly text?: string;
   /** Optional short text beside the glyph, e.g. how many notes are collected. */
   readonly badge?: string;
   readonly tone?: 'note' | 'warning';
@@ -68,6 +71,7 @@ export function InfoTip({
         <span className="infotip-glyph" aria-hidden="true">
           {glyph}
         </span>
+        {text !== undefined && <span className="infotip-text">{text}</span>}
         {badge !== undefined && <span className="infotip-badge">{badge}</span>}
       </button>
 

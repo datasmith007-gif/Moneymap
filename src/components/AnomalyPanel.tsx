@@ -19,7 +19,7 @@ export function AnomalyPanel({ anomalies }: { readonly anomalies: readonly Anoma
   if (anomalies === null || anomalies.length === 0) return null;
 
   return (
-    <section className="panel">
+    <section className="content-section anomaly-section">
       <header className="panel-head">
         <h2>Unusual spending</h2>
         <span className="muted">

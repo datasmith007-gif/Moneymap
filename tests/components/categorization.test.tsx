@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 
+import { useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CategorizationReviewPanel } from '../../src/components/CategorizationReviewPanel.tsx';
+import { ReviewCategorizationSection } from '../../src/components/ReviewCategorizationSection.tsx';
+import { ReviewCenter } from '../../src/components/ReviewCenter.tsx';
 import { RuleManagerPanel } from '../../src/components/RuleManagerPanel.tsx';
 import { TransactionCategoryControl } from '../../src/components/TransactionCategoryControl.tsx';
 import type { TransactionRegisterRow } from '../../src/engine/transactions.ts';
@@ -64,14 +67,26 @@ function unclassifiedRow(
 describe('transaction category controls', () => {
   it('offers direction-compatible categories and records an exact manual choice', () => {
     const onChange = vi.fn();
-    render(<TransactionCategoryControl row={row()} onChange={onChange} />);
+    const { rerender } = render(<TransactionCategoryControl row={row()} onChange={onChange} />);
 
     const select = screen.getByLabelText('Category for UPI LOCAL MART');
     expect(screen.queryByRole('option', { name: 'Salary' })).toBeNull();
     expect(screen.getByRole('option', { name: 'Groceries' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Money lent' })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: 'Borrowed money' })).toBeNull();
     fireEvent.change(select, { target: { value: 'shopping' } });
     expect(onChange).toHaveBeenCalledWith('shopping');
     expect(screen.getByText('Needs category')).toBeTruthy();
+
+    const creditRow = {
+      ...row(),
+      transaction: { ...row().transaction, type: 'credit' as const },
+    };
+    rerender(<TransactionCategoryControl row={creditRow} onChange={onChange} />);
+    expect(screen.getByRole('option', { name: 'Borrowed money' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Loan repayment received' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Business & freelance income' })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: 'Money lent' })).toBeNull();
   });
 
   it('shows manual provenance and can return a row to automatic classification', () => {
@@ -276,10 +291,13 @@ describe('rule authoring', () => {
       <RuleManagerPanel
         store={store}
         revision={0}
+        rules={[]}
         onAdd={onAdd}
         onDelete={async () => undefined}
       />,
     );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
 
     const categorySelect = screen.getByLabelText('Category');
     expect(
@@ -305,5 +323,170 @@ describe('rule authoring', () => {
       patterns: ['LOCAL MART'],
       category: 'groceries',
     });
+  });
+});
+
+describe('review center', () => {
+  it('is collapsed by default and reports the same loaded work it opens', async () => {
+    const store = createMemoryStore();
+    const rows = [
+      unclassifiedRow('mart-a', 'LOCAL MART', '2025-08-12'),
+      unclassifiedRow('mart-b', 'Local-Mart', '2025-08-11'),
+    ];
+
+    render(
+      <ReviewCenter
+        store={store}
+        revision={0}
+        rows={rows}
+        onCategorize={async () => undefined}
+        onAddRule={async () => ({
+          id: 'user:1',
+          order: 0,
+          operator: 'contains',
+          patterns: ['MART'],
+          category: 'groceries',
+          origin: 'user',
+        })}
+        onDeleteRule={async () => undefined}
+      />,
+    );
+
+    expect(screen.getByText('2 uncategorized')).toBeTruthy();
+    expect(screen.getByText('1 repeated label groups')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Categorization review' })).toBeNull();
+    await waitFor(() => expect(screen.getByText('0 personal session rules')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open review' }));
+    expect(screen.getByRole('heading', { name: 'Categorization review' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Categorization rules' })).toBeTruthy();
+    expect(screen.queryByLabelText('Merchant or narration text')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Create rule' }));
+    expect(screen.getByLabelText('Merchant or narration text')).toBeTruthy();
+  });
+
+  it('filters before grouping and paging, combines filters, and clears them', () => {
+    const axis = unclassifiedRow('axis-debit', 'LOCAL-MART', '2025-08-12');
+    const icici = {
+      ...unclassifiedRow('icici-credit', 'LOCAL MART', '2025-08-11'),
+      transaction: {
+        ...unclassifiedRow('icici-credit', 'LOCAL MART', '2025-08-11').transaction,
+        accountId: 'icici',
+        type: 'credit' as const,
+      },
+      account: { institution: 'ICICI Bank', identifierMasked: 'XXXXXXXX7654' },
+    };
+    render(
+      <ReviewCategorizationSection rows={[axis, icici]} onCategorize={async () => undefined} />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'local, mart' } });
+    fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'icici' } });
+    fireEvent.change(screen.getByLabelText('Direction'), { target: { value: 'debit' } });
+    expect(screen.getByText('0 of 2 transactions')).toBeTruthy();
+    expect(screen.getByText('No uncategorized transactions match these filters.')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Direction'), { target: { value: 'credit' } });
+    expect(screen.getByText('1 of 2 transactions')).toBeTruthy();
+    expect(screen.getByText('LOCAL MART')).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'ICICI Bank 7654' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(screen.getByText('2 of 2 transactions')).toBeTruthy();
+  });
+
+  it('offers exact Undo for single and bulk categorization actions', async () => {
+    const onCategorize = vi.fn(async () => undefined);
+    render(
+      <ReviewCategorizationSection
+        rows={[
+          unclassifiedRow('mart-a', 'LOCAL MART', '2025-08-12'),
+          unclassifiedRow('mart-b', 'Local-Mart', '2025-08-11'),
+        ]}
+        onCategorize={onCategorize}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Category for LOCAL MART debit'), {
+      target: { value: 'groceries' },
+    });
+    await screen.findByText('Categorized 2 LOCAL MART transactions as Groceries.', {
+      selector: '.action-toast p',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(onCategorize).toHaveBeenCalledTimes(4));
+    expect(onCategorize.mock.calls).toEqual([
+      ['mart-a', 'groceries'],
+      ['mart-b', 'groceries'],
+      ['mart-a', null],
+      ['mart-b', null],
+    ]);
+    expect(screen.getByText('Undid categorization for 2 transactions.')).toBeTruthy();
+  });
+
+  it('restores an explicit unclassified override instead of clearing it', async () => {
+    const explicit = {
+      ...unclassifiedRow('explicit', 'LOCAL MART', '2025-08-12'),
+      classification: {
+        ...unclassifiedRow('explicit', 'LOCAL MART', '2025-08-12').classification,
+        source: 'user' as const,
+      },
+    };
+    const onCategorize = vi.fn(async () => undefined);
+    render(<ReviewCategorizationSection rows={[explicit]} onCategorize={onCategorize} />);
+    fireEvent.change(screen.getByLabelText('Category for LOCAL MART debit'), {
+      target: { value: 'groceries' },
+    });
+    await screen.findByText('Categorized LOCAL MART as Groceries.', {
+      selector: '.action-toast p',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(onCategorize).toHaveBeenLastCalledWith('explicit', 'unclassified'));
+  });
+
+  it('offers Undo for the successful subset of a failed bulk action', async () => {
+    const onCategorize = vi.fn(async (id: string) => {
+      if (id === 'mart-b') throw new Error('write failed');
+    });
+    render(
+      <ReviewCategorizationSection
+        rows={[
+          unclassifiedRow('mart-a', 'LOCAL MART', '2025-08-12'),
+          unclassifiedRow('mart-b', 'Local-Mart', '2025-08-11'),
+        ]}
+        onCategorize={onCategorize}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Category for LOCAL MART debit'), {
+      target: { value: 'groceries' },
+    });
+    await screen.findByRole('alert');
+    expect(screen.getByRole('alert').textContent).toContain('Saved 1 of 2');
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(onCategorize).toHaveBeenLastCalledWith('mart-a', null));
+  });
+
+  it('moves focus to the next category control after a saved row disappears', async () => {
+    function Harness() {
+      const [rows, setRows] = useState([
+        unclassifiedRow('cafe', 'CORNER CAFE', '2025-08-12'),
+        unclassifiedRow('mart', 'LOCAL MART', '2025-08-11'),
+      ]);
+      return (
+        <ReviewCategorizationSection
+          rows={rows}
+          onCategorize={async (id) =>
+            setRows((current) => current.filter((item) => item.transaction.id !== id))
+          }
+        />
+      );
+    }
+    render(<Harness />);
+    const first = screen.getByLabelText('Category for CORNER CAFE debit');
+    first.focus();
+    fireEvent.change(first, { target: { value: 'food_dining' } });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText('Category for LOCAL MART debit')),
+    );
   });
 });

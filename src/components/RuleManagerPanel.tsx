@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { CATEGORIES, categoryLabel, type CategoryId } from '../enrichment/taxonomy.ts';
 import type { Rule, RuleInput, RuleOperator } from '../enrichment/types.ts';
-import { useRulePreview, useRules } from '../hooks/useDashboard.ts';
+import { useRulePreview } from '../hooks/useDashboard.ts';
 import { formatPaise } from '../model/money.ts';
 import type { Store } from '../storage/store.ts';
 import { CategoryOptionGroups } from './CategoryOptionGroups.tsx';
@@ -18,25 +18,27 @@ const RULE_CATEGORIES = CATEGORIES.filter((category) => category.id !== 'unclass
 export function RuleManagerPanel({
   store,
   revision,
+  rules,
   onAdd,
   onDelete,
 }: {
   readonly store: Store;
   readonly revision: number;
+  readonly rules: readonly Rule[] | null;
   readonly onAdd: (input: RuleInput) => Promise<Rule>;
   readonly onDelete: (ruleId: string) => Promise<void>;
 }) {
+  const [authoring, setAuthoring] = useState(false);
   const [patternsText, setPatternsText] = useState('');
   const [operator, setOperator] = useState<RuleOperator>('contains');
   const [category, setCategory] = useState<CategoryId>('groceries');
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const rules = useRules(store, revision);
   const patterns = patternsText.split(/[\n,]+/).map((value) => value.trim());
   const hasPattern = patterns.some((pattern) => pattern !== '');
   const input: RuleInput | null = hasPattern ? { operator, patterns, category } : null;
-  const preview = useRulePreview(store, revision, input);
+  const preview = useRulePreview(store, revision, authoring ? input : null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -46,6 +48,7 @@ export function RuleManagerPanel({
     try {
       await onAdd(input);
       setPatternsText('');
+      setAuthoring(false);
     } catch {
       setError('The rule could not be saved. Try again.');
     } finally {
@@ -66,71 +69,84 @@ export function RuleManagerPanel({
   }
 
   return (
-    <section className="panel">
+    <section className="review-section rule-manager">
       <header className="panel-head">
-        <h2>Categorization rules</h2>
+        <h3>Categorization rules</h3>
         {rules !== null && (
           <span className="muted">
             {rules.length} rule{rules.length === 1 ? '' : 's'} this session
           </span>
         )}
+        <button
+          type="button"
+          className="button-tertiary panel-head-action"
+          aria-expanded={authoring}
+          aria-controls="rule-authoring-form"
+          onClick={() => setAuthoring((current) => !current)}
+        >
+          {authoring ? 'Cancel' : 'Create rule'}
+        </button>
       </header>
       <p className="panel-note">
         Rules apply to past and future imported rows in this session. A manual transaction choice
         still wins.
       </p>
 
-      <form className="rule-form" onSubmit={submit}>
-        <label className="field rule-patterns" htmlFor="rule-patterns">
-          <span>Merchant or narration text</span>
-          <input
-            id="rule-patterns"
-            aria-label="Merchant or narration text"
-            value={patternsText}
-            onChange={(event) => setPatternsText(event.target.value)}
-            placeholder="e.g. local mart, neighbourhood foods"
-          />
-        </label>
-        <label className="field" htmlFor="rule-operator">
-          <span>Match</span>
-          <select
-            id="rule-operator"
-            aria-label="Match"
-            value={operator}
-            onChange={(event) => setOperator(event.target.value as RuleOperator)}
-          >
-            {Object.entries(OPERATOR_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field" htmlFor="rule-category">
-          <span>Category</span>
-          <select
-            id="rule-category"
-            aria-label="Category"
-            value={category}
-            onChange={(event) => setCategory(event.target.value as CategoryId)}
-          >
-            <CategoryOptionGroups categories={RULE_CATEGORIES} />
-          </select>
-        </label>
-        <button type="submit" disabled={saving || input === null || preview === null}>
-          {saving ? 'Saving…' : 'Save rule'}
-        </button>
-        {/*
+      {authoring && (
+        <form id="rule-authoring-form" className="rule-form" onSubmit={submit}>
+          <label className="field rule-patterns" htmlFor="rule-patterns">
+            <span>Merchant or narration text</span>
+            <input
+              id="rule-patterns"
+              aria-label="Merchant or narration text"
+              value={patternsText}
+              onChange={(event) => setPatternsText(event.target.value)}
+              placeholder="e.g. local mart, neighbourhood foods"
+            />
+          </label>
+          <label className="field" htmlFor="rule-operator">
+            <span>Match</span>
+            <select
+              id="rule-operator"
+              aria-label="Match"
+              value={operator}
+              onChange={(event) => setOperator(event.target.value as RuleOperator)}
+            >
+              {Object.entries(OPERATOR_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field" htmlFor="rule-category">
+            <span>Category</span>
+            <select
+              id="rule-category"
+              aria-label="Category"
+              value={category}
+              onChange={(event) => setCategory(event.target.value as CategoryId)}
+            >
+              <CategoryOptionGroups categories={RULE_CATEGORIES} />
+            </select>
+          </label>
+          <button type="submit" disabled={saving || input === null || preview === null}>
+            {saving ? 'Saving…' : 'Save rule'}
+          </button>
+          {/*
           Below the row rather than inside the first field. The row is
           bottom-aligned, so a hint living inside one field pushed that field's
           input up by its own height and left the three controls out of line
           with each other.
         */}
-        <small className="rule-hint">Separate alternatives with commas.</small>
-      </form>
+          <small className="rule-hint">Separate alternatives with commas.</small>
+        </form>
+      )}
 
-      {input !== null && preview === null && <p className="empty">Checking past entries…</p>}
-      {preview !== null && (
+      {authoring && input !== null && preview === null && (
+        <p className="empty">Checking past entries…</p>
+      )}
+      {authoring && preview !== null && (
         <p className="rule-preview" role="status" aria-live="polite">
           Matches <strong>{preview.matchCount}</strong> past entr
           {preview.matchCount === 1 ? 'y' : 'ies'} totalling{' '}

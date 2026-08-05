@@ -512,6 +512,38 @@ describe('internal transfers', () => {
       share: 1,
     });
   });
+
+  it('excludes lending and borrowing principal from income, spend, and categories', () => {
+    const dashboard = ready(
+      {
+        accounts: [axis],
+        imports: [record()],
+        transactions: [
+          txn({ id: 'salary', date: '2025-08-01', type: 'credit', amount: 10_000_00 }),
+          txn({ id: 'borrowed', date: '2025-08-02', type: 'credit', amount: 20_000_00 }),
+          txn({ id: 'lent', date: '2025-08-03', type: 'debit', amount: 5_000_00 }),
+          txn({ id: 'food', date: '2025-08-04', type: 'debit', amount: 1_000_00 }),
+        ],
+      },
+      {
+        ...OPTIONS,
+        classification: {
+          rules: [],
+          overrides: new Map([
+            ['salary', 'salary'],
+            ['borrowed', 'borrowed_money'],
+            ['lent', 'money_lent'],
+            ['food', 'food_dining'],
+          ]),
+        },
+      },
+    );
+
+    const august = dashboard.flows.find((flow) => flow.month === '2025-08')!;
+    expect(august.inflow).toBe(10_000_00);
+    expect(august.outflow).toBe(1_000_00);
+    expect(dashboard.spendByCategory.map((category) => category.category)).toEqual(['food_dining']);
+  });
 });
 
 describe('spend by category', () => {

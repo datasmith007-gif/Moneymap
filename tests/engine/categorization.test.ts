@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  filterCategorizationRows,
   groupCategorizationRows,
   sortCategorizationRows,
 } from '../../src/engine/categorization.ts';
@@ -98,6 +99,37 @@ describe('categorization label groups', () => {
         (g) => g.type,
       ),
     ).toEqual(['credit', 'debit', 'debit']);
+  });
+});
+
+describe('categorization review filtering', () => {
+  it('normalizes search and combines it with exact account and direction filters', () => {
+    const matching = row('match', 'LOCAL-MART');
+    const otherAccount = {
+      ...row('other-account', 'LOCAL MART'),
+      transaction: { ...row('other-account', 'LOCAL MART').transaction, accountId: 'other' },
+    };
+    const credit = row('credit', 'LOCAL MART', 'credit');
+
+    expect(
+      filterCategorizationRows([matching, otherAccount, credit], {
+        search: ' local, mart ',
+        accountId: matching.transaction.accountId,
+        type: 'debit',
+      }).map((item) => item.transaction.id),
+    ).toEqual(['match']);
+  });
+
+  it('treats blank normalized search as no search and can match raw narration', () => {
+    const supplied = row('raw', 'COUNTERPARTY');
+    const withoutCounterparty = {
+      ...supplied,
+      classification: { ...supplied.classification, counterparty: null },
+      transaction: { ...supplied.transaction, description: 'UPI A/B CAFE' },
+    };
+
+    expect(filterCategorizationRows([withoutCounterparty], { search: '---' })).toHaveLength(1);
+    expect(filterCategorizationRows([withoutCounterparty], { search: 'a b cafe' })).toHaveLength(1);
   });
 });
 
