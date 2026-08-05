@@ -67,21 +67,12 @@ export function ImportPage({
         </button>
       </header>
 
-      {queue.items.length > 0 && (
-        <div className="page-actions">
-          <button
-            type="button"
-            className="link"
-            onClick={() => {
-              setSelectedId(null);
-              queue.reset();
-            }}
-          >
-            Import more statements
-          </button>
-        </div>
-      )}
-
+      {/*
+        No "import more" button: when the batch is settled the dropzone comes
+        back on its own, and a second control that only clears the list to
+        re-reveal the same box was one affordance for one action too many.
+        Dropping again appends to the queue, so the batch just gets longer.
+      */}
       {(queue.items.length === 0 || settled) && (
         <FileDrop onFiles={queue.addFiles} busy={queue.busy} />
       )}

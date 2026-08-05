@@ -32,15 +32,15 @@ It also shows five banks (HDFC, ICICI, SBI, Axis, Kotak). We parse two.
 
 ## Where we are
 
-| Layer             | State                                                                                                                                                                              |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/ingestion/`  | Positional pdf.js extraction, Axis + ICICI parsers, confidence registry, five-outcome union, reconciliation gate proving `opening + credits − debits === closing` in integer paise |
-| `src/model/`      | `Paise`, `Account`, `Transaction`, `ParsedStatement`, provenance on every row, month **and day** arithmetic with no `Date` object anywhere                                         |
-| `src/enrichment/` | `classify()` over rules → merchant knowledge → transfer pairing; confidence bands; rule dry-run; per-import stats                                                                  |
-| `src/storage/`    | `Store` interface + in-memory adapter, holding two record classes — derived-from-source and user-authored                                                                          |
-| `src/engine/`     | Dashboard aggregation, review queue, enriched transaction query + deterministic CSV export, and per-account coverage gaps                                                          |
-| UI                | Import-first shell and Dashboard; explicit light/dark mode, blurred dashboard entry backdrop, exact tables/KPIs, categorization review, manual choices, and session rule authoring |
-| Tests             | **307 passing, 2 skipped.** The 2 are integration tests gated on real private PDFs and never run in CI.                                                                            |
+| Layer             | State                                                                                                                                                                                                                               |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/ingestion/`  | Positional pdf.js extraction, Axis + ICICI parsers, confidence registry, five-outcome union, reconciliation gate proving `opening + credits − debits === closing` in integer paise                                                  |
+| `src/model/`      | `Paise`, `Account`, `Transaction`, `ParsedStatement`, provenance on every row, month **and day** arithmetic with no `Date` object anywhere                                                                                          |
+| `src/enrichment/` | `classify()` over rules → merchant knowledge → transfer pairing; confidence bands; rule dry-run; per-import stats                                                                                                                   |
+| `src/storage/`    | `Store` interface + in-memory adapter, holding two record classes — derived-from-source and user-authored                                                                                                                           |
+| `src/engine/`     | Dashboard aggregation, review queue, enriched transaction query + deterministic CSV export, per-account coverage gaps, and robust per-category spend baselines                                                                      |
+| UI                | Import-first shell and Dashboard; explicit light/dark mode, blurred dashboard entry backdrop, exact tables/KPIs, categorization review, manual choices, session rule authoring, and standing caveats collapsed behind one indicator |
+| Tests             | **339 passing, 2 skipped.** The 2 are integration tests gated on real private PDFs and never run in CI.                                                                                                                             |
 
 ### Shipped, in order
 
@@ -51,6 +51,9 @@ It also shows five banks (HDFC, ICICI, SBI, Axis, Kotak). We parse two.
 5. **Aggregation visibility** — exposed category shares, classification coverage, savings rate, variation, account lag/gaps, and monthly net inside the existing Dashboard. Exact tables and KPIs reuse the provisional UI without introducing another screen or visual system before the final design lands.
 6. **Interactive categorization** — exposed classification source on enriched transaction rows, added a collapsible and paged frequency-first label queue with occurrence/total ordering, inline repeated-label transaction drill-downs, exact-row fallback, and bulk or individual manual choices, preview-before-save personal rules, honest count/amount coverage, and single-open category transaction drill-downs. All writes are serialized, retroactive, and session-scoped; every dashboard figure refreshes after a change.
 7. **Import-first application shell** — replaced tab navigation with an explicit Import → Dashboard handoff and a small Dashboard → Import action, kept the live dashboard inert behind the import surface, and added a local-only light/dark preference. View changes never clear imported or user-authored session data.
+8. **Dashboard signal-to-noise** — collected every standing caveat into one hover/focus indicator instead of a box per panel (which also surfaced the net-position-only caveats that were previously rendered nowhere), moved statement coverage into a dialog, dropped range and standard deviation from the averages tiles, hid the categorization guidance behind a tip, and removed the redundant "import more statements" control. Nothing was deleted from the honesty machinery — it was collapsed, not dropped.
+9. **Anomaly detection** — robust per-category spend baselines (median + median absolute deviation, integer paise) and the payments that sit far outside them, with a dashboard panel that renders only when there is something to report.
+10. **Sortable review columns** — retired the "order by" dropdown for per-column sorting in the headings themselves, on both the label queue and the exact-row view, with `aria-sort` carrying the state. Comparators live in `engine/categorization.ts` so they are testable and total.
 
 ---
 
@@ -79,21 +82,34 @@ These are not preferences. Designing against them will produce something that do
 - **Money is integer paise everywhere.** Rupees are a display-edge concern only.
 - **Every figure originates in `src/engine/`.** Components render values, never derive them — the test runner only collects `.ts`/`.tsx` under `tests/`, and a number computed inside a component is a number nobody can test.
 - **Two rates, deliberately different.** Classification coverage by **count** answers "how much work is left"; by **amount** answers "how much of the money is explained". One ₹80,000 rent payment is 1% of the work and 40% of the money. Do not merge them.
+- **A baseline is never windowed.** The dashboard's 3/6/12/all selector chooses which anomalies are _reported_, never the history they are measured against — `loadAnomalies` reads the whole store on purpose. A three-month baseline would call an ordinary quarter unusual, and "usual" would change every time the reader touched a control.
+- **Outlier statistics must be robust.** Median and MAD, never mean and σ: the single large payment being searched for is exactly the value that drags a mean toward itself and inflates σ, so a mean-based test hides what it was built to find. MAD of zero is a normal case (a fixed monthly recharge), not an error — it falls back to a multiple of the median.
+- **A multiple is not a finding.** Any "N× your usual" claim needs an absolute floor beneath it, or a ₹60 coffee against a ₹15 median is reported as four times normal. It also needs a minimum sample size, below which the honest output is nothing at all.
+- **One definition of spend, exported.** `isSpendRow` in `aggregate.ts` is the single answer to "is this spending?" — a second copy is how the category breakdown and any other spend figure quietly start disagreeing about the same rupees.
+- **A panel that is always on screen saying everything is fine is a panel nobody reads.** Standing caveats live behind one indicator; findings-style panels render nothing when there is nothing to report, and their presence is the signal.
 
 ---
 
 ## Next steps
 
-Two independent tracks. Neither depends on the other; pick by value.
+Two candidates. Neither depends on the other; pick by value.
 
 ### A. More bank parsers
 
 HDFC, SBI, Kotak — what makes the app usable by anyone not banking with Axis or ICICI. Largest single chunk, and fully independent of everything else.
-⚠️ **Blocked on real statements.** Both existing parsers were built against real PDFs and verified by eye; synthetic fixtures alone would not prove a parser works. Needs sample statements before it can start.
+⚠️ **Blocked on real statements.** Both existing parsers were built against real PDFs and verified by eye; synthetic fixtures alone would not prove a parser works. `fixtures/private/` holds one Axis and one ICICI PDF — i.e. only the two banks already covered. Needs sample statements before it can start.
 
-### B. Anomaly detection
+### B. CSV ingestion
 
-The "one purchase was four times your usual shopping day" insight, plus the per-category baselines it needs. Small, self-contained, deterministic — but a Dashboard garnish rather than something a screen depends on.
+Promoted out of the deferred table, where it sat blocked on nothing. It is the one path that routes **around** Track A's blocker: a user of any bank that exports CSV stops needing a bespoke PDF parser.
+
+Bigger than the deferred table implied, and the reasons are worth knowing before starting:
+
+- `StatementDocument` is a **positional PDF IR** (x/y per word, because bank tables are defined by column position). A CSV carries no such thing, so `ParserRegistry` cannot be the dispatch point — format detection has to happen ahead of it, in `parseStatement`.
+- The **reconciliation gate has nothing to check.** `opening + credits − debits === closing` is the guarantee the whole ingestion layer rests on, and most CSV exports carry neither opening nor closing balance. Either the gate learns a second, weaker mode (running-balance continuity where a balance column exists) or CSV imports land somewhere honest that is not `parsed`. **This is the decision to make first** — it governs everything else.
+- Column mapping varies per bank, so the confidence-scored parser-per-bank shape probably still applies, just over rows instead of positioned words.
+
+Formerly Track B, anomaly detection, shipped as item 9 above.
 
 ---
 
@@ -108,12 +124,14 @@ The "one purchase was four times your usual shopping day" insight, plus the per-
 | **Custom user-defined labels**                                  | Persistence. A label that cannot outlive the session is not one anyone would invest in creating.  |
 | **Account behaviour analysis, investment habits, goal setting** | Persistence. Previously specced as features 4 and 5; product content is in the planning doc.      |
 | **Real net worth** — investments, FD, EPF, NPS, manual assets   | `Instrument`, `Holding` and `Snapshot` do not exist yet. Bank accounts only today.                |
-| **CSV ingestion**                                               | Nothing. Named in the stack, never built; every parser is PDF-only.                               |
+| ~~**CSV ingestion**~~                                           | Nothing — promoted to Next steps B above.                                                         |
 | **Scanned-PDF OCR**                                             | Out of scope by choice. Detected and reported honestly instead.                                   |
 
 ## Known gaps in the code
 
 - `CONFIDENCE_THRESHOLD` is currently unreachable — every confidence the classifier emits sits above it. Kept as the contract for a future strategy that scores lower; the confidence _bands_ carry the uncertainty in the meantime.
 - ICICI consolidated statements import the savings ledger only and flag the rest, so **every ICICI import lands as `needs_review`**.
-- No end-to-end tests. Playwright is named in the stack and is not installed.
-- Component coverage is still partial — aggregation visibility, categorization controls/rules, and the batch import hook are tested; page-level interactions and most import components are not.
+- No end-to-end tests. Playwright is named in the stack, `npm run test:e2e` exists as a script, and `@playwright/test` is **not a dependency** — there is no config and no spec directory either.
+- Component coverage is still partial — aggregation visibility, categorization controls/rules, disclosures, the anomaly panel, and the batch import hook are tested; page-level interactions and most import components are not.
+- `AnomalyPanel` reports findings but does not link into them. Clicking a row should open the transaction the way the category and month drill-downs already do.
+- The anomaly unit is one transaction, not one day's total. A day-level baseline ("four times your usual shopping _day_") is an addition to `anomalies.ts`, not a rewrite of it — the per-transaction unit was chosen because every other surface points at a row the reader can open and check.

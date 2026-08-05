@@ -11,6 +11,9 @@ import { formatAccountLabel } from '../model/accountDisplay.ts';
  * balances taken on different days is only true as of the earliest one, and an
  * account whose statement predates the selected window is marked rather than
  * quietly folded in.
+ *
+ * Accounts left out of the total for being in another currency are reported by
+ * `DashboardNotices` with every other standing caveat, not as a footnote here.
  */
 export function NetPositionPanel({ position }: { readonly position: NetPosition }) {
   return (
@@ -70,14 +73,6 @@ export function NetPositionPanel({ position }: { readonly position: NetPosition 
           </tbody>
         </table>
       </div>
-
-      {position.excluded.length > 0 && (
-        <p className="caveat">
-          {position.excluded.length} account
-          {position.excluded.length === 1 ? ' is' : 's are'} not in rupees and{' '}
-          {position.excluded.length === 1 ? 'is' : 'are'} left out of this total.
-        </p>
-      )}
     </section>
   );
 }

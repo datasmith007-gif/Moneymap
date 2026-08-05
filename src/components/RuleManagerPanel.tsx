@@ -90,7 +90,6 @@ export function RuleManagerPanel({
             onChange={(event) => setPatternsText(event.target.value)}
             placeholder="e.g. local mart, neighbourhood foods"
           />
-          <small>Separate alternatives with commas.</small>
         </label>
         <label className="field" htmlFor="rule-operator">
           <span>Match</span>
@@ -121,6 +120,13 @@ export function RuleManagerPanel({
         <button type="submit" disabled={saving || input === null || preview === null}>
           {saving ? 'Saving…' : 'Save rule'}
         </button>
+        {/*
+          Below the row rather than inside the first field. The row is
+          bottom-aligned, so a hint living inside one field pushed that field's
+          input up by its own height and left the three controls out of line
+          with each other.
+        */}
+        <small className="rule-hint">Separate alternatives with commas.</small>
       </form>
 
       {input !== null && preview === null && <p className="empty">Checking past entries…</p>}

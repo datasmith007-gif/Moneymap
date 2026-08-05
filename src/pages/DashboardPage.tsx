@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { SessionStore } from '../hooks/useSessionStore.ts';
-import { useAccountCoverage, useDashboard, useTransactionRows } from '../hooks/useDashboard.ts';
+import {
+  useAccountCoverage,
+  useAnomalies,
+  useDashboard,
+  useTransactionRows,
+} from '../hooks/useDashboard.ts';
 import type { WindowSize } from '../engine/aggregate.ts';
 import { NetPositionPanel } from '../components/NetPositionPanel.tsx';
 import { AveragesPanel } from '../components/AveragesPanel.tsx';
@@ -10,7 +15,10 @@ import { MonthTransactions } from '../components/MonthTransactions.tsx';
 import { CategoryBreakdownPanel } from '../components/CategoryBreakdownPanel.tsx';
 import { AccountCoveragePanel } from '../components/AccountCoveragePanel.tsx';
 import { CategorizationReviewPanel } from '../components/CategorizationReviewPanel.tsx';
+import { AnomalyPanel } from '../components/AnomalyPanel.tsx';
 import { RuleManagerPanel } from '../components/RuleManagerPanel.tsx';
+import { DashboardNotices } from '../components/DashboardNotices.tsx';
+import { Modal } from '../components/Modal.tsx';
 import type { CategoryId } from '../enrichment/taxonomy.ts';
 import { formatMonth, monthBounds, type MonthKey } from '../model/date.ts';
 
@@ -25,6 +33,7 @@ export function DashboardPage({ session }: { readonly session: SessionStore }) {
   const [window, setWindow] = useState<WindowSize>(6);
   const [selectedMonth, setSelectedMonth] = useState<MonthKey | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryId | null>(null);
+  const [coverageOpen, setCoverageOpen] = useState(false);
 
   const dashboard = useDashboard(session.store, session.revision, window);
   const accountCoverage = useAccountCoverage(session.store, session.revision);
@@ -48,6 +57,14 @@ export function DashboardPage({ session }: { readonly session: SessionStore }) {
     selectedCategory === null || rangeStart === undefined || rangeEnd === undefined
       ? null
       : { category: selectedCategory, type: 'debit', from: rangeStart, to: rangeEnd },
+  );
+  // Bounded by the same range, so the findings shown belong to the period on
+  // screen. The baseline behind them is the whole history either way.
+  const anomalies = useAnomalies(
+    session.store,
+    session.revision,
+    rangeStart ?? null,
+    rangeEnd ?? null,
   );
 
   useEffect(() => {
@@ -73,7 +90,7 @@ export function DashboardPage({ session }: { readonly session: SessionStore }) {
     );
   }
 
-  const stale = dashboard.monthsSinceLatestStatement;
+  const hasCoverage = accountCoverage !== null && accountCoverage.length > 0;
 
   return (
     <>
@@ -88,6 +105,18 @@ export function DashboardPage({ session }: { readonly session: SessionStore }) {
           {window === 'all' ? `All ${dashboard.flows.length} months` : `${window} months`} to{' '}
           {formatMonth(dashboard.anchorMonth)}
         </span>
+        {/*
+          Every standing caveat lives in this one indicator. Coverage is a full
+          table and gets a dialog instead — both are here rather than in the
+          page body because they answer questions *about* the figures, and a
+          reader who is not asking them should not have to scroll past them.
+        */}
+        <DashboardNotices dashboard={dashboard} />
+        {hasCoverage && (
+          <button type="button" className="link" onClick={() => setCoverageOpen(true)}>
+            Statement coverage
+          </button>
+        )}
         <div className="segmented" role="group" aria-label="Time window">
           {WINDOWS.map((size) => (
             <button
@@ -103,21 +132,14 @@ export function DashboardPage({ session }: { readonly session: SessionStore }) {
         </div>
       </div>
 
-      {stale > 0 && (
-        <p className="caveat caveat-note">
-          <span aria-hidden="true">i</span> Your most recent statement ends{' '}
-          {formatMonth(dashboard.anchorMonth)} — {stale} month{stale === 1 ? '' : 's'} ago. Import a
-          newer one to bring these figures up to date.
-        </p>
+      {coverageOpen && hasCoverage && (
+        <Modal label="Statement coverage" onClose={() => setCoverageOpen(false)}>
+          <AccountCoveragePanel accounts={accountCoverage} />
+        </Modal>
       )}
 
       <NetPositionPanel position={dashboard.netPosition} />
-      {accountCoverage !== null && <AccountCoveragePanel accounts={accountCoverage} />}
-      <AveragesPanel
-        averages={dashboard.averages}
-        caveats={dashboard.caveats}
-        savingsRate={dashboard.savingsRate}
-      />
+      <AveragesPanel averages={dashboard.averages} savingsRate={dashboard.savingsRate} />
       <RuleManagerPanel
         store={session.store}
         revision={session.revision}
@@ -135,6 +157,7 @@ export function DashboardPage({ session }: { readonly session: SessionStore }) {
         }
         onCategorize={session.categorize}
       />
+      <AnomalyPanel anomalies={anomalies} />
       <MoneyFlowChart
         flows={dashboard.flows}
         selectedMonth={selectedMonth}

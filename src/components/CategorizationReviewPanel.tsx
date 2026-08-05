@@ -1,11 +1,20 @@
 import { Fragment, useMemo, useState } from 'react';
 import { CATEGORIES, categoryApplies, type CategoryId } from '../enrichment/taxonomy.ts';
-import { groupCategorizationRows, type CategorizationOrder } from '../engine/categorization.ts';
+import {
+  groupCategorizationRows,
+  sortCategorizationRows,
+  DEFAULT_LABEL_SORT,
+  DEFAULT_ROW_SORT,
+  type LabelSort,
+  type RowSort,
+} from '../engine/categorization.ts';
 import type { TransactionRegisterRow } from '../engine/transactions.ts';
 import { formatAccountLabel } from '../model/accountDisplay.ts';
 import { formatIsoDate } from '../model/date.ts';
 import { formatPaise } from '../model/money.ts';
 import { CategoryOptionGroups } from './CategoryOptionGroups.tsx';
+import { InfoTip } from './InfoTip.tsx';
+import { SortableHeader } from './SortableHeader.tsx';
 import { TransactionCategoryControl } from './TransactionCategoryControl.tsx';
 
 type ReviewView = 'labels' | 'transactions';
@@ -20,25 +29,44 @@ export function CategorizationReviewPanel({
   readonly onCategorize: (transactionId: string, category: CategoryId | null) => Promise<void>;
 }) {
   const [view, setView] = useState<ReviewView>('labels');
-  const [orderBy, setOrderBy] = useState<CategorizationOrder>('occurrences');
+  const [labelSort, setLabelSort] = useState<LabelSort>(DEFAULT_LABEL_SORT);
+  const [rowSort, setRowSort] = useState<RowSort>(DEFAULT_ROW_SORT);
   const [expanded, setExpanded] = useState(true);
   const [page, setPage] = useState(1);
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const groups = useMemo(() => groupCategorizationRows(rows ?? [], orderBy), [rows, orderBy]);
+  const groups = useMemo(() => groupCategorizationRows(rows ?? [], labelSort), [rows, labelSort]);
+  const sortedRows = useMemo(() => sortCategorizationRows(rows ?? [], rowSort), [rows, rowSort]);
   const itemCount = view === 'labels' ? groups.length : (rows?.length ?? 0);
   const totalPages = Math.max(1, Math.ceil(itemCount / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * PAGE_SIZE;
   const visibleGroups = groups.slice(pageStart, pageStart + PAGE_SIZE);
-  const visibleRows = rows?.slice(pageStart, pageStart + PAGE_SIZE) ?? [];
+  const visibleRows = sortedRows.slice(pageStart, pageStart + PAGE_SIZE);
 
   function selectView(next: ReviewView) {
     setView(next);
     setPage(1);
     setSelectedGroupKey(null);
   }
+
+  /**
+   * Re-sorting returns to page one and closes any open drill-down. Both of
+   * those are about not stranding the reader: page 4 of the old order holds
+   * unrelated rows in the new one, and an expanded group whose parent row has
+   * moved off the page has nothing left to be attached to.
+   */
+  function reorder<Sort>(apply: (sort: Sort) => void): (sort: Sort) => void {
+    return (sort) => {
+      apply(sort);
+      setPage(1);
+      setSelectedGroupKey(null);
+    };
+  }
+
+  const sortLabels = reorder(setLabelSort);
+  const sortRows = reorder(setRowSort);
 
   async function save(key: string, transactionIds: readonly string[], category: CategoryId | null) {
     setSavingKey(key);
@@ -66,6 +94,10 @@ export function CategorizationReviewPanel({
             {rows.length} transaction{rows.length === 1 ? '' : 's'} need a category
           </span>
         )}
+        <InfoTip glyph="i" label="How label grouping works">
+          Labels combine punctuation-insensitive counterparty or narration text. Group choices apply
+          to current matching rows; use a rule for future imports.
+        </InfoTip>
         <button
           type="button"
           className="link"
@@ -80,28 +112,9 @@ export function CategorizationReviewPanel({
       {expanded && (
         <div id="categorization-review-content">
           <div className="categorization-view">
-            <p className="panel-note">
-              Labels combine punctuation-insensitive counterparty or narration text. Group choices
-              apply to current matching rows; use a rule for future imports.
-            </p>
             <div className="categorization-controls">
-              {view === 'labels' && (
-                <label className="categorization-order">
-                  <span>Order by</span>
-                  <select
-                    aria-label="Order labels by"
-                    value={orderBy}
-                    onChange={(event) => {
-                      setOrderBy(event.target.value as CategorizationOrder);
-                      setPage(1);
-                      setSelectedGroupKey(null);
-                    }}
-                  >
-                    <option value="occurrences">Occurrences</option>
-                    <option value="total">Total</option>
-                  </select>
-                </label>
-              )}
+              {/* Ordering lives in the column headings now, not in a control
+                  that sits away from the table it reorders. */}
               <div className="segmented" role="group" aria-label="Categorization review view">
                 <button
                   type="button"
@@ -136,10 +149,25 @@ export function CategorizationReviewPanel({
               <table className="txns">
                 <thead>
                   <tr>
-                    <th>Label</th>
-                    <th>Direction</th>
-                    <th className="num">Occurrences</th>
-                    <th className="num">Total</th>
+                    <SortableHeader column="label" sort={labelSort} onSort={sortLabels}>
+                      Label
+                    </SortableHeader>
+                    <SortableHeader column="direction" sort={labelSort} onSort={sortLabels}>
+                      Direction
+                    </SortableHeader>
+                    <SortableHeader
+                      column="occurrences"
+                      sort={labelSort}
+                      onSort={sortLabels}
+                      numeric
+                    >
+                      Occurrences
+                    </SortableHeader>
+                    <SortableHeader column="total" sort={labelSort} onSort={sortLabels} numeric>
+                      Total
+                    </SortableHeader>
+                    {/* Not sortable: every row here is unclassified, so the
+                        column holds a control rather than a value. */}
                     <th>Category</th>
                   </tr>
                 </thead>
@@ -240,6 +268,8 @@ export function CategorizationReviewPanel({
               <TransactionReviewTable
                 rows={visibleRows}
                 savingId={savingKey}
+                sort={rowSort}
+                onSort={sortRows}
                 onCategorize={(transactionId, category) =>
                   save(transactionId, [transactionId], category)
                 }
@@ -280,24 +310,56 @@ export function CategorizationReviewPanel({
   );
 }
 
-/** One exact transaction table shared by the full view and repeated-label drill-downs. */
+/**
+ * One exact transaction table shared by the full view and repeated-label
+ * drill-downs.
+ *
+ * Sorting is optional because the two callers are not the same table in
+ * different clothes. The full view is a queue the reader navigates and pages
+ * through; a drill-down is the handful of rows behind one already-sorted label,
+ * where a second ordering control would compete with the one above it for no
+ * gain.
+ */
 function TransactionReviewTable({
   rows,
   savingId,
+  sort,
+  onSort,
   onCategorize,
 }: {
   readonly rows: readonly TransactionRegisterRow[];
   readonly savingId: string | null;
+  readonly sort?: RowSort;
+  readonly onSort?: (next: RowSort) => void;
   readonly onCategorize: (transactionId: string, category: CategoryId | null) => Promise<void>;
 }) {
   return (
     <table className="txns">
       <thead>
         <tr>
-          <th>Date</th>
-          <th>Transaction</th>
-          <th>Account</th>
-          <th className="num">Amount</th>
+          {sort !== undefined && onSort !== undefined ? (
+            <>
+              <SortableHeader column="date" sort={sort} onSort={onSort}>
+                Date
+              </SortableHeader>
+              <SortableHeader column="transaction" sort={sort} onSort={onSort}>
+                Transaction
+              </SortableHeader>
+              <SortableHeader column="account" sort={sort} onSort={onSort}>
+                Account
+              </SortableHeader>
+              <SortableHeader column="amount" sort={sort} onSort={onSort} numeric>
+                Amount
+              </SortableHeader>
+            </>
+          ) : (
+            <>
+              <th>Date</th>
+              <th>Transaction</th>
+              <th>Account</th>
+              <th className="num">Amount</th>
+            </>
+          )}
           <th>Category</th>
         </tr>
       </thead>
