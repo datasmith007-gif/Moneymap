@@ -46,6 +46,7 @@ export function ImportPage({
     queue.items.length > 0 &&
     !queue.busy &&
     queue.items.every((item) => item.status === 'done' || item.status === 'rejected');
+  const currentStep = importProgressStep(queue.items.length, settled, canOpenDashboard);
 
   return (
     <>
@@ -59,6 +60,7 @@ export function ImportPage({
         </div>
         <button
           type="button"
+          className="button-primary"
           disabled={!canOpenDashboard}
           title={canOpenDashboard ? undefined : 'Import a statement first'}
           onClick={onOpenDashboard}
@@ -66,6 +68,22 @@ export function ImportPage({
           To dashboard
         </button>
       </header>
+
+      <ol className="import-steps" aria-label="Import progress">
+        {['Select files', 'Verify results', 'Open dashboard'].map((label, index) => {
+          const step = index + 1;
+          return (
+            <li
+              key={label}
+              className={step === currentStep ? 'import-step import-step-current' : 'import-step'}
+              aria-current={step === currentStep ? 'step' : undefined}
+            >
+              <span aria-hidden="true">{step < currentStep ? '✓' : step}</span>
+              {label}
+            </li>
+          );
+        })}
+      </ol>
 
       {/*
         No "import more" button: when the batch is settled the dropzone comes
@@ -99,4 +117,14 @@ export function ImportPage({
       <ImportedList imports={session.imports} accounts={session.accounts} />
     </>
   );
+}
+
+/** Derive the visible progress marker from the queue; it owns no import state. */
+export function importProgressStep(
+  itemCount: number,
+  settled: boolean,
+  canOpenDashboard: boolean,
+): 1 | 2 | 3 {
+  if (itemCount === 0) return 1;
+  return settled && canOpenDashboard ? 3 : 2;
 }

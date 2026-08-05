@@ -68,6 +68,8 @@ describe('dashboard aggregation visibility', () => {
 
     expect(screen.getByText('66.6%')).toBeTruthy();
     expect(screen.getByText('2 of 3 transactions')).toBeTruthy();
+    expect(screen.getByText('Categorised amount')).toBeTruthy();
+    expect(screen.getByText('80%')).toBeTruthy();
     expect(screen.getByText('2,000.00')).toBeTruthy();
     expect(screen.getByText('Food & dining')).toBeTruthy();
     expect(screen.getByText('6,000.00')).toBeTruthy();
@@ -92,7 +94,7 @@ describe('dashboard aggregation visibility', () => {
       />,
     );
 
-    expect(screen.getByText('99.9%')).toBeTruthy();
+    expect(screen.getAllByText('99.9%')).toHaveLength(2);
     expect(screen.queryByText('100%')).toBeNull();
     expect(screen.getByText('999 of 1000 transactions')).toBeTruthy();
   });

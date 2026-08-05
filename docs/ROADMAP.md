@@ -19,7 +19,7 @@ Around thirty comments across `src/` cite a requirement by number — `(§1.2)`,
 
 **The Ledger Finance App** (`Ledger.dc.html`, shared separately) is the agreed end state. Seven screens: Dashboard, Import, Review, Transactions, Budgets, Accounts, Rules.
 
-**Right now it is a reference for _what the app must be able to do_, not for how it looks.** The UI design is being worked on separately and a final reference will be shared later. Until then: **no design-system port, no styling work, no new screens, no router or nav.** Build the headless capability those screens will need, so the UI drops onto finished, tested logic.
+**Right now it is a reference for _what the app must be able to do_, not for how it looks.** A scoped calm-editorial visual system now covers the existing Import → Dashboard flow, but the seven-screen design-system port remains deferred: **no new screens, router, or navigation have been added.** Continue building capability against the finished engine contracts rather than copying unsupported prototype surfaces.
 
 Two things the prototype gets wrong, worth remembering when the design does land:
 
@@ -32,15 +32,15 @@ It also shows five banks (HDFC, ICICI, SBI, Axis, Kotak). We parse two.
 
 ## Where we are
 
-| Layer             | State                                                                                                                                                                                                                               |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/ingestion/`  | Positional pdf.js extraction, Axis + ICICI parsers, confidence registry, five-outcome union, reconciliation gate proving `opening + credits − debits === closing` in integer paise                                                  |
-| `src/model/`      | `Paise`, `Account`, `Transaction`, `ParsedStatement`, provenance on every row, month **and day** arithmetic with no `Date` object anywhere                                                                                          |
-| `src/enrichment/` | `classify()` over rules → merchant knowledge → transfer pairing; confidence bands; rule dry-run; per-import stats                                                                                                                   |
-| `src/storage/`    | `Store` interface + in-memory adapter, holding two record classes — derived-from-source and user-authored                                                                                                                           |
-| `src/engine/`     | Dashboard aggregation, review queue, enriched transaction query + deterministic CSV export, per-account coverage gaps, and robust per-category spend baselines                                                                      |
-| UI                | Import-first shell and Dashboard; explicit light/dark mode, blurred dashboard entry backdrop, exact tables/KPIs, categorization review, manual choices, session rule authoring, and standing caveats collapsed behind one indicator |
-| Tests             | **339 passing, 2 skipped.** The 2 are integration tests gated on real private PDFs and never run in CI.                                                                                                                             |
+| Layer             | State                                                                                                                                                                                                                                                      |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/ingestion/`  | Positional pdf.js extraction, Axis + ICICI parsers, confidence registry, five-outcome union, reconciliation gate proving `opening + credits − debits === closing` in integer paise                                                                         |
+| `src/model/`      | `Paise`, `Account`, `Transaction`, `ParsedStatement`, provenance on every row, month **and day** arithmetic with no `Date` object anywhere                                                                                                                 |
+| `src/enrichment/` | `classify()` over rules → merchant knowledge → transfer pairing; confidence bands; rule dry-run; per-import stats                                                                                                                                          |
+| `src/storage/`    | `Store` interface + in-memory adapter, holding two record classes — derived-from-source and user-authored                                                                                                                                                  |
+| `src/engine/`     | Dashboard aggregation, review queue, enriched transaction query + deterministic CSV export, per-account coverage gaps, and robust per-category spend baselines                                                                                             |
+| UI                | Calm editorial Import-first shell and briefing-led Dashboard; light/dark mode, responsive open analysis sections, readable data-quality disclosure, collapsed Review center, filters, exact Undo, stable focus, manual choices, and session rule authoring |
+| Tests             | **353 passing, 2 skipped.** The 2 are integration tests gated on real private PDFs and never run in CI.                                                                                                                                                    |
 
 ### Shipped, in order
 
@@ -54,17 +54,19 @@ It also shows five banks (HDFC, ICICI, SBI, Axis, Kotak). We parse two.
 8. **Dashboard signal-to-noise** — collected every standing caveat into one hover/focus indicator instead of a box per panel (which also surfaced the net-position-only caveats that were previously rendered nowhere), moved statement coverage into a dialog, dropped range and standard deviation from the averages tiles, hid the categorization guidance behind a tip, and removed the redundant "import more statements" control. Nothing was deleted from the honesty machinery — it was collapsed, not dropped.
 9. **Anomaly detection** — robust per-category spend baselines (median + median absolute deviation, integer paise) and the payments that sit far outside them, with a dashboard panel that renders only when there is something to report.
 10. **Sortable review columns** — retired the "order by" dropdown for per-column sorting in the headings themselves, on both the label queue and the exact-row view, with `aria-sort` carrying the state. Comparators live in `engine/categorization.ts` so they are testable and total.
+11. **Calm editorial UI/UX refresh** — centralized the light/dark visual tokens, made the Dashboard a financial briefing before its workbench, changed analytical cards into open sections, added the queue-derived three-step Import marker, and consolidated categorization and rules under a collapsed Review center. Review filters run before grouping and paging; the latest single or bulk decision can be undone to its exact prior override state, partial failures remain recoverable, and focus follows disappearing rows.
+12. **Expanded practical taxonomy** — added business, rental, pension, education, tax, dependant, household-service, personal-care, gift, fitness and pet categories, plus direction-safe Money lent, Borrowed money and Loan repayment received labels. Loan principal movements are flow-neutral, so they do not masquerade as income, spending, savings or anomalies; automatic rules remain conservative and these subjective labels are available for manual choices and personal rules.
 
 ---
 
 ## Decisions locked
 
-| Decision              | Choice                             | Consequence                                                                    |
-| --------------------- | ---------------------------------- | ------------------------------------------------------------------------------ |
-| Classification method | Rules + merchant knowledge only    | No model, no LLM. Deterministic and fully testable.                            |
-| Persistence           | **Stays in-memory**                | Budgets & Goals are out of scope; rules and overrides do not survive a reload. |
-| Design fidelity       | Broadsheet + a derived dark ground | Deferred until the final UI reference arrives.                                 |
-| Rule scope            | Always retroactive                 | See constraints below.                                                         |
+| Decision              | Choice                               | Consequence                                                                     |
+| --------------------- | ------------------------------------ | ------------------------------------------------------------------------------- |
+| Classification method | Rules + merchant knowledge only      | No model, no LLM. Deterministic and fully testable.                             |
+| Persistence           | **Stays in-memory**                  | Budgets & Goals are out of scope; rules and overrides do not survive a reload.  |
+| Design fidelity       | Calm editorial + derived dark ground | Applied to the existing two-view shell; broader screen design remains deferred. |
+| Rule scope            | Always retroactive                   | See constraints below.                                                          |
 
 ---
 

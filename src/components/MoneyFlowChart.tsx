@@ -50,7 +50,7 @@ export function MoneyFlowChart({
   }));
 
   return (
-    <section className="panel">
+    <section className="content-section money-flow-section">
       <header className="panel-head">
         <h2>Money in and out</h2>
         <span className="muted">click a month for the transactions behind it</span>

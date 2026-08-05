@@ -34,7 +34,7 @@ export function SavingsTrendChart({ points }: { readonly points: readonly Cumula
   const last = data[data.length - 1];
 
   return (
-    <section className="panel">
+    <section className="content-section savings-section">
       <header className="panel-head">
         <h2>Cumulative savings</h2>
         {last && <span className="muted">{formatPaise(last.cumulativeNet)} over the window</span>}
@@ -87,8 +87,7 @@ function TrendTooltip({
 }) {
   if (active !== true) return null;
   const row = payload?.[0]?.payload as
-    | { readonly month: MonthKey; readonly cumulativeNet: number }
-    | undefined;
+    { readonly month: MonthKey; readonly cumulativeNet: number } | undefined;
   if (row === undefined) return null;
 
   return (

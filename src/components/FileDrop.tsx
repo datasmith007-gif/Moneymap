@@ -55,8 +55,8 @@ export function FileDrop({ onFiles, busy }: FileDropProps) {
         Choose files
       </button>
       <p className="drop-note">
-        Drop as many as you like — password-protected files are welcome. Parsed on this device, in
-        memory. Nothing is uploaded, and nothing is kept once you close the tab.
+        Supports Axis Bank and ICICI Bank PDFs, including password-protected files. Parsed on this
+        device, in memory. Nothing is uploaded or kept after you close the tab.
       </p>
     </div>
   );

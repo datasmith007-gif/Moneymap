@@ -31,7 +31,7 @@ export function AveragesPanel({
 
   if (months === 0) {
     return (
-      <section className="panel">
+      <section className="summary-card monthly-kpis">
         <header className="panel-head">
           <h2>Monthly averages</h2>
         </header>
@@ -44,7 +44,7 @@ export function AveragesPanel({
   }
 
   return (
-    <section className="panel">
+    <section className="summary-card monthly-kpis">
       <header className="panel-head">
         <h2>Monthly averages</h2>
         <span className="muted">

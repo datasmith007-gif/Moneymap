@@ -50,7 +50,7 @@ export function CategoryBreakdownPanel({
   }
 
   return (
-    <section className="panel">
+    <section className="content-section category-section">
       <header className="panel-head">
         <h2>Spending by category</h2>
         <span className="muted">share of all spend in the selected window</span>
@@ -64,6 +64,11 @@ export function CategoryBreakdownPanel({
             {coverage.classifiedCount} of {coverage.classifiedCount + coverage.unclassifiedCount}{' '}
             transactions
           </span>
+        </div>
+        <div className="kpi">
+          <span className="kpi-label">Categorised amount</span>
+          <span className="kpi-value">{formatCoveragePercent(coverage.amountRate)}</span>
+          <span className="kpi-range">Share of spending amount with a category</span>
         </div>
         <div className="kpi">
           <span className="kpi-label">Needs review</span>

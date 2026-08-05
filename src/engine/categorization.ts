@@ -3,6 +3,39 @@ import type { Paise, TransactionType } from '../model/canonical.ts';
 import { formatAccountLabel } from '../model/accountDisplay.ts';
 import type { TransactionRegisterRow } from './transactions.ts';
 
+/** Display-only constraints for the uncategorized review queue. */
+export interface CategorizationReviewFilter {
+  /** Punctuation- and case-insensitive counterparty or narration search. */
+  readonly search?: string;
+  readonly accountId?: string;
+  readonly type?: TransactionType;
+}
+
+/**
+ * Narrow enriched review rows before they are grouped, sorted, or paged.
+ *
+ * Keeping this in the engine makes the group counts and bulk actions operate on
+ * exactly the same set the reader can see. The input order is preserved.
+ */
+export function filterCategorizationRows(
+  rows: readonly TransactionRegisterRow[],
+  filter: CategorizationReviewFilter = {},
+): readonly TransactionRegisterRow[] {
+  const search = normalise(filter.search ?? '');
+
+  return rows.filter((row) => {
+    if (filter.accountId !== undefined && row.transaction.accountId !== filter.accountId) {
+      return false;
+    }
+    if (filter.type !== undefined && row.transaction.type !== filter.type) return false;
+    if (search === '') return true;
+
+    return normalise(
+      `${row.classification.counterparty ?? ''} ${row.transaction.description}`,
+    ).includes(search);
+  });
+}
+
 export interface CategorizationLabelGroup {
   /** Stable UI key: normalized label plus movement direction. */
   readonly key: string;

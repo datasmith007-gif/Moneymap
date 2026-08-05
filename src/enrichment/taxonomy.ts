@@ -19,6 +19,9 @@ export type CategoryId =
   | 'interest'
   | 'refund'
   | 'dividend'
+  | 'business_income'
+  | 'rental_income'
+  | 'pension_benefits'
   | 'other_income'
   // Essentials
   | 'rent_home'
@@ -28,18 +31,29 @@ export type CategoryId =
   | 'health'
   | 'insurance'
   | 'emi_loan'
+  | 'education'
+  | 'taxes'
+  | 'childcare'
+  | 'household_services'
   // Lifestyle
   | 'food_dining'
   | 'shopping'
   | 'entertainment'
   | 'travel'
   | 'subscriptions'
+  | 'personal_care'
+  | 'gifts_donations'
+  | 'fitness_sports'
+  | 'pets'
   // Money movement
   | 'self_transfer'
   | 'investments'
   | 'credit_card_payment'
   | 'cash_withdrawal'
   | 'friends_family'
+  | 'money_lent'
+  | 'borrowed_money'
+  | 'loan_repayment_received'
   // Other
   | 'fees_charges'
   | 'unclassified';
@@ -67,6 +81,14 @@ const LIST: readonly Category[] = [
   { id: 'interest', label: 'Interest', group: 'income', applies: 'credit' },
   { id: 'refund', label: 'Refund', group: 'income', applies: 'credit' },
   { id: 'dividend', label: 'Dividend', group: 'income', applies: 'credit' },
+  {
+    id: 'business_income',
+    label: 'Business & freelance income',
+    group: 'income',
+    applies: 'credit',
+  },
+  { id: 'rental_income', label: 'Rental income', group: 'income', applies: 'credit' },
+  { id: 'pension_benefits', label: 'Pension & benefits', group: 'income', applies: 'credit' },
   { id: 'other_income', label: 'Other income', group: 'income', applies: 'credit' },
 
   { id: 'rent_home', label: 'Rent & home', group: 'essentials', applies: 'debit' },
@@ -76,12 +98,30 @@ const LIST: readonly Category[] = [
   { id: 'health', label: 'Health', group: 'essentials', applies: 'debit' },
   { id: 'insurance', label: 'Insurance', group: 'essentials', applies: 'debit' },
   { id: 'emi_loan', label: 'EMI & loans', group: 'essentials', applies: 'debit' },
+  { id: 'education', label: 'Education', group: 'essentials', applies: 'debit' },
+  { id: 'taxes', label: 'Taxes', group: 'essentials', applies: 'debit' },
+  {
+    id: 'childcare',
+    label: 'Childcare & dependants',
+    group: 'essentials',
+    applies: 'debit',
+  },
+  {
+    id: 'household_services',
+    label: 'Household services',
+    group: 'essentials',
+    applies: 'debit',
+  },
 
   { id: 'food_dining', label: 'Food & dining', group: 'lifestyle', applies: 'debit' },
   { id: 'shopping', label: 'Shopping', group: 'lifestyle', applies: 'debit' },
   { id: 'entertainment', label: 'Entertainment', group: 'lifestyle', applies: 'debit' },
   { id: 'travel', label: 'Travel', group: 'lifestyle', applies: 'debit' },
   { id: 'subscriptions', label: 'Subscriptions', group: 'lifestyle', applies: 'debit' },
+  { id: 'personal_care', label: 'Personal care', group: 'lifestyle', applies: 'debit' },
+  { id: 'gifts_donations', label: 'Gifts & donations', group: 'lifestyle', applies: 'debit' },
+  { id: 'fitness_sports', label: 'Fitness & sports', group: 'lifestyle', applies: 'debit' },
+  { id: 'pets', label: 'Pets', group: 'lifestyle', applies: 'debit' },
 
   // Both directions: a self-transfer has two legs, an investment can be
   // redeemed, a card payment can be refunded, cash can be deposited back.
@@ -95,6 +135,19 @@ const LIST: readonly Category[] = [
   },
   { id: 'cash_withdrawal', label: 'Cash withdrawal', group: 'money_movement', applies: 'both' },
   { id: 'friends_family', label: 'Friends & family', group: 'money_movement', applies: 'both' },
+  { id: 'money_lent', label: 'Money lent', group: 'money_movement', applies: 'debit' },
+  {
+    id: 'borrowed_money',
+    label: 'Borrowed money',
+    group: 'money_movement',
+    applies: 'credit',
+  },
+  {
+    id: 'loan_repayment_received',
+    label: 'Loan repayment received',
+    group: 'money_movement',
+    applies: 'credit',
+  },
 
   { id: 'fees_charges', label: 'Fees & charges', group: 'other', applies: 'debit' },
   { id: 'unclassified', label: 'Unclassified', group: 'other', applies: 'both' },
@@ -126,11 +179,15 @@ export function categoryApplies(id: CategoryId, type: 'credit' | 'debit'): boole
 /**
  * Categories excluded from income and spend.
  *
- * A transfer between the user's own accounts is not income and not spend — it is
- * the same rupee appearing twice. Counting it inflates both sides of the
- * dashboard by the transferred amount. This is the single correction that
- * retires the engine's standing self-transfer caveat.
+ * Transfers and loan-principal movements change where money is held or create
+ * an asset or liability; they are not earned income or consumed spending. EMI
+ * stays in spending because a bank row does not split principal from interest.
  */
 export function isFlowNeutral(id: CategoryId): boolean {
-  return id === 'self_transfer';
+  return (
+    id === 'self_transfer' ||
+    id === 'money_lent' ||
+    id === 'borrowed_money' ||
+    id === 'loan_repayment_received'
+  );
 }
