@@ -7,37 +7,35 @@ import { AveragesPanel } from '../../src/components/AveragesPanel.tsx';
 import { CategoryBreakdownPanel } from '../../src/components/CategoryBreakdownPanel.tsx';
 import { AccountCoveragePanel } from '../../src/components/AccountCoveragePanel.tsx';
 import { NetPositionPanel } from '../../src/components/NetPositionPanel.tsx';
-import type {
-  Averages,
-  Caveat,
-  ClassificationCoverage,
-  NetPosition,
-} from '../../src/engine/aggregate.ts';
+import type { Averages, ClassificationCoverage, NetPosition } from '../../src/engine/aggregate.ts';
 import type { CategoryId } from '../../src/enrichment/taxonomy.ts';
 import type { TransactionRegisterRow } from '../../src/engine/transactions.ts';
 import { txn } from '../fixtures/canonical.ts';
 
 afterEach(cleanup);
 
-const caveats: readonly Caveat[] = [];
-
 describe('dashboard aggregation visibility', () => {
-  it('shows savings rate and standard deviation with the monthly averages', () => {
+  it('shows the mean and savings rate only — dispersion is not part of this panel', () => {
     const averages: Averages = {
       income: { mean: 10_000_00, min: 8_000_00, max: 12_000_00, stdDev: 1_000_00, months: 3 },
       spend: { mean: 7_500_00, min: 6_000_00, max: 9_000_00, stdDev: 800_00, months: 3 },
       savings: { mean: 2_500_00, min: 1_000_00, max: 4_000_00, stdDev: 500_00, months: 3 },
       monthsCounted: ['2025-06', '2025-07', '2025-08'],
-      monthsExcluded: [],
+      monthsExcluded: [{ month: '2025-05', reason: 'partial_coverage' }],
     };
 
-    render(<AveragesPanel averages={averages} caveats={caveats} savingsRate={0.25} />);
+    render(<AveragesPanel averages={averages} savingsRate={0.25} />);
 
     expect(screen.getByText('Savings rate')).toBeTruthy();
     expect(screen.getByText('25%')).toBeTruthy();
-    expect(screen.getByText('Standard deviation 1,000.00')).toBeTruthy();
-    expect(screen.getByText('Standard deviation 800.00')).toBeTruthy();
-    expect(screen.getByText('Standard deviation 500.00')).toBeTruthy();
+    expect(screen.getByText('10,000.00')).toBeTruthy();
+    expect(screen.getByText('7,500.00')).toBeTruthy();
+    expect(screen.getByText('2,500.00')).toBeTruthy();
+
+    expect(screen.queryByText(/Standard deviation/)).toBeNull();
+    expect(screen.queryByText(/Range /)).toBeNull();
+    // Exclusions are reported once, by DashboardNotices — not per panel.
+    expect(screen.queryByText(/Left out/)).toBeNull();
   });
 
   it('shows category amount, share, classification rate, and unexplained spend', () => {

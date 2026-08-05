@@ -22,6 +22,11 @@
      "money out" would read as "something is wrong". */
   --series-1: #2a78d6;
   --series-2: #eb6834;
+  /* One display step, shared by the wordmark and the net-position figure. They
+     are the two things a reader should be able to find without looking, and a
+     single token keeps them from drifting apart. Not repeated in the theme
+     blocks below — those override colour only. */
+  --display-size: 40px;
   color-scheme: light;
 }
 
@@ -103,7 +108,9 @@ body {
 
 .app-head {
   display: flex;
-  align-items: baseline;
+  /* Centred, not baseline-aligned: at the display step the wordmark's baseline
+     sits far below the small header buttons' and drags them to the bottom. */
+  align-items: center;
   gap: 12px;
   margin-bottom: 24px;
 }
@@ -128,9 +135,11 @@ body {
 }
 
 .app-head h1 {
-  font-size: 20px;
+  font-size: var(--display-size);
+  font-weight: 600;
   margin: 0;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 
 .tagline {
@@ -566,9 +575,21 @@ button:disabled {
   margin-left: auto;
 }
 
+/* `.link` claims the free space by default; in this row the window control is
+   the thing anchored right, so links stay grouped with the anchor text. */
+.page-actions .link {
+  margin-left: 0;
+}
+
 @media (max-width: 640px) {
+  /* The display step is sized for the desktop column; at this width the
+     wordmark and the header controls no longer share a line. */
+  :root {
+    --display-size: 30px;
+  }
+
   .app-head {
-    align-items: center;
+    flex-wrap: wrap;
   }
 
   .import-surface {
@@ -613,7 +634,7 @@ button:disabled {
 /* ── Hero + KPI row ──────────────────────────────────────────────────────── */
 
 .hero {
-  font-size: 40px;
+  font-size: var(--display-size);
   font-weight: 600;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
@@ -728,12 +749,8 @@ button:disabled {
 .categorization-view {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
-}
-
-.categorization-view .panel-note {
-  margin-bottom: 0 !important;
 }
 
 .categorization-view .segmented {
@@ -934,6 +951,146 @@ button:disabled {
 
 .caveat-warning {
   background: var(--critical-wash);
+}
+
+/* ── Collapsed notes (InfoTip) ───────────────────────────────────────────── */
+
+.infotip {
+  position: relative;
+  display: inline-flex;
+  /* Neither the caveat text nor the panel below it should shift when the tip
+     opens, so the panel is taken out of flow and the trigger keeps its box. */
+  line-height: 1;
+}
+
+.infotip-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12px;
+  cursor: help;
+}
+
+.infotip-glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.infotip-badge {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.infotip-warning .infotip-trigger {
+  border-color: var(--critical);
+  color: var(--critical);
+}
+
+.infotip-warning .infotip-glyph {
+  background: var(--critical);
+  color: #fff;
+}
+
+.infotip-panel {
+  position: absolute;
+  top: calc(100% + 7px);
+  z-index: 20;
+  display: block;
+  width: max-content;
+  max-width: min(360px, 78vw);
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: left;
+  font-weight: 400;
+}
+
+.infotip-start .infotip-panel {
+  left: 0;
+}
+
+.infotip-end .infotip-panel {
+  right: 0;
+}
+
+.infotip-title {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.notice-list {
+  margin: 0;
+  padding-left: 17px;
+  display: grid;
+  gap: 7px;
+}
+
+.notice-warning {
+  color: var(--ink);
+}
+
+.notice-warning::marker {
+  color: var(--critical);
+}
+
+/* ── Modal ───────────────────────────────────────────────────────────────── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: start center;
+  padding: 6vh 16px 24px;
+  overflow-y: auto;
+  background: rgba(11, 11, 11, 0.45);
+}
+
+.modal-surface {
+  position: relative;
+  width: min(820px, 100%);
+}
+
+.modal-surface > .panel {
+  margin: 0;
+  /* Room for the close button, which floats over the panel's own header. */
+  padding-right: 52px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 17px;
+  line-height: 1;
 }
 
 /* ── Charts ──────────────────────────────────────────────────────────────── */

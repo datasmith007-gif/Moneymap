@@ -1,26 +1,30 @@
-import type { Averages, Caveat, WindowStat } from '../engine/aggregate.ts';
+import type { Averages, WindowStat } from '../engine/aggregate.ts';
 import { formatPaise } from '../model/money.ts';
-import { formatMonth } from '../model/date.ts';
 
 /**
- * Average monthly income, spend, and savings — each with the range behind it.
+ * Average monthly income, spend, and savings.
  *
- * The range is shown beside every mean because a ₹40k average hides a ₹10k–₹90k
- * swing, and the mean alone invites the reader to treat it as a typical month.
- * Min and max are exact integers; the mean is the one rounded figure here.
+ * Each tile shows the mean and nothing else. Range and standard deviation used
+ * to sit under every mean; they are dispersion analysis, not the headline this
+ * panel exists to give, and three extra figures per tile made the four tiles
+ * read as a table to be studied rather than a row to be scanned. If dispersion
+ * comes back it belongs in a view of its own.
  *
- * The three tiles are **not** an equation. Each mean is rounded independently, so
+ * The tiles are **not** an equation. Each mean is rounded independently, so
  * income − spend can differ from savings by a paise, and savings is computed from
  * the monthly nets rather than derived from the other two. Laying them out as a
  * row of separate statistics rather than a sum keeps that honest.
+ *
+ * What is *excluded* from these averages — partly covered months, short windows —
+ * is not printed here. It is collected with every other standing caveat in
+ * `DashboardNotices`, so the reader has one place to look rather than one
+ * footnote per panel.
  */
 export function AveragesPanel({
   averages,
-  caveats,
   savingsRate,
 }: {
   readonly averages: Averages;
-  readonly caveats: readonly Caveat[];
   readonly savingsRate: number | null;
 }) {
   const months = averages.monthsCounted.length;
@@ -62,29 +66,6 @@ export function AveragesPanel({
           </span>
         </div>
       </div>
-
-      {averages.monthsExcluded.length > 0 && (
-        <p className="caveat">
-          Left out:{' '}
-          {averages.monthsExcluded
-            .map(
-              (excluded) =>
-                `${formatMonth(excluded.month)} (${
-                  excluded.reason === 'no_coverage' ? 'no statement' : 'partly covered'
-                })`,
-            )
-            .join(', ')}
-        </p>
-      )}
-
-      {caveats
-        .filter((caveat) => caveat.affects.some((a) => a !== 'net_position'))
-        .map((caveat) => (
-          <p key={caveat.id} className={`caveat caveat-${caveat.severity}`}>
-            <span aria-hidden="true">{caveat.severity === 'warning' ? '!' : 'i'}</span>{' '}
-            {caveat.text}
-          </p>
-        ))}
     </section>
   );
 }
@@ -97,16 +78,6 @@ function Kpi({ label, stat }: { readonly label: string; readonly stat: WindowSta
     <div className="kpi">
       <span className="kpi-label">{label}</span>
       <span className="kpi-value">{formatPaise(stat.mean)}</span>
-      {stat.months > 1 ? (
-        <>
-          <span className="kpi-range">
-            Range {formatPaise(stat.min)} – {formatPaise(stat.max)}
-          </span>
-          <span className="kpi-range">Standard deviation {formatPaise(stat.stdDev)}</span>
-        </>
-      ) : (
-        <span className="kpi-range muted">1 month — no variation yet</span>
-      )}
     </div>
   );
 }

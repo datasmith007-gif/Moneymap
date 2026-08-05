@@ -6,6 +6,7 @@ import { formatAccountLabel } from '../model/accountDisplay.ts';
 import { formatIsoDate } from '../model/date.ts';
 import { formatPaise } from '../model/money.ts';
 import { CategoryOptionGroups } from './CategoryOptionGroups.tsx';
+import { InfoTip } from './InfoTip.tsx';
 import { TransactionCategoryControl } from './TransactionCategoryControl.tsx';
 
 type ReviewView = 'labels' | 'transactions';
@@ -66,6 +67,10 @@ export function CategorizationReviewPanel({
             {rows.length} transaction{rows.length === 1 ? '' : 's'} need a category
           </span>
         )}
+        <InfoTip glyph="i" label="How label grouping works">
+          Labels combine punctuation-insensitive counterparty or narration text. Group choices apply
+          to current matching rows; use a rule for future imports.
+        </InfoTip>
         <button
           type="button"
           className="link"
@@ -80,10 +85,6 @@ export function CategorizationReviewPanel({
       {expanded && (
         <div id="categorization-review-content">
           <div className="categorization-view">
-            <p className="panel-note">
-              Labels combine punctuation-insensitive counterparty or narration text. Group choices
-              apply to current matching rows; use a rule for future imports.
-            </p>
             <div className="categorization-controls">
               {view === 'labels' && (
                 <label className="categorization-order">
